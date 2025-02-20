@@ -10,4 +10,5 @@
 - preview and flag stage: remove ax_space and ax_right ticks/labels
 - flag stage: zapping close to the window edges after jess doesnt work
 - compute stage: the event duration lines dont update with tsamp changes
+- compute stage: properly save burst properties, dont pass the variables, use self.blabla
 
