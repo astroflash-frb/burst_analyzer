@@ -1,0 +1,13 @@
+- add a check so that the dynamic spectrum is the correct shape to downsample
+
+- double check all the calculations, e.g. fluence, energy, etc
+- convert the toas to barycentric?
+- better normalization (normalise vs normalize in basic funcs)
+
+- add dedisperse function (allow user to input a new DM value?)
+- improve acf/gaussian fitting initial parameters (bounds help but slows down code a lot)
+
+- preview and flag stage: remove ax_space and ax_right ticks/labels
+- flag stage: zapping close to the window edges after jess doesnt work
+- compute stage: the event duration lines dont update with tsamp changes
+
