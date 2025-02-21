@@ -152,6 +152,7 @@ class BurstAnalyzer:
         self.ax_right = None # right panel for time-avg'd freq spectrum
         self.button_axes = [] 
         self.button_cids = []
+        self.cmap = 'viridis'
         self.setup_figure()        
 
     def setup_figure(self):
@@ -239,20 +240,20 @@ class BurstAnalyzer:
         # some instruction annotations
         self.ax_space.text(0., 0.98, "Crop: hold 'c', click twice in top panel.",
                           transform=self.ax_space.transAxes, fontsize=10, color='white',
-                          verticalalignment='top', bbox=dict(facecolor='darkviolet', alpha=1))
+                          verticalalignment='top', bbox=dict(facecolor='red', alpha=1))
         self.ax_space.text(0., 0.78, "Event start/end: hold 'e', click twice in top panel.",
                           transform=self.ax_space.transAxes, fontsize=10, color='white',
-                          verticalalignment='top', bbox=dict(facecolor='darkviolet', alpha=1))
-        self.ax_space.text(0., 0.58, "Burst regions: hold 'b', click twice per burst in top panel.",
+                          verticalalignment='top', bbox=dict(facecolor='orange', alpha=1))
+        self.ax_space.text(0., 0.58, "Burst regions: hold 'b', click twice per burst (Gaussian fit area) in top panel.",
                           transform=self.ax_space.transAxes, fontsize=10, color='white',
-                          verticalalignment='top', bbox=dict(facecolor='darkviolet', alpha=1))
+                          verticalalignment='top', bbox=dict(facecolor='lime', alpha=1))
         self.ax_space.text(0., 0.38, "Peaks: hold 'm'/'d' and click to add/delete a peak position.",
                           transform=self.ax_space.transAxes, fontsize=10, color='white',
-                          verticalalignment='top', bbox=dict(facecolor='darkviolet', alpha=1))
+                          verticalalignment='top', bbox=dict(facecolor='cyan', alpha=1))
         res_info = f"Time resolution: {self.time_factor * self.tsamp * 1e6} us, " \
                   f"Frequency resolution: {self.freq_factor * self.freqres} MHz"
         self.ax_space.text(0., 0.18, res_info, transform=self.ax_space.transAxes, fontsize=10,
-                          color='white', verticalalignment='top', bbox=dict(facecolor='black', alpha=1))       
+                          color='white', verticalalignment='top', bbox=dict(facecolor='darkviolet', alpha=1))       
         
         
         # create stage 1 buttons
@@ -281,6 +282,8 @@ class BurstAnalyzer:
         # Hide some tick labels
         plt.setp(self.ax_space.get_xticklabels(), visible=False)
         plt.setp(self.ax_space.get_yticklabels(), visible=False)
+        plt.setp(self.ax_top.get_xticklabels(), visible=False)
+        plt.setp(self.ax_top.get_yticklabels(), visible=False)
         plt.setp(self.ax_right.get_yticklabels(), visible=False)
         plt.setp(self.ax_right.get_yticklabels(), visible=False)
 
@@ -346,7 +349,7 @@ class BurstAnalyzer:
         # vmin = np.nanquantile(self.masked_ds, 0.01)
         # vmax = np.nanquantile(self.masked_ds, 0.99)
 
-        self.ax_main.imshow(self.masked_ds, aspect='auto', origin='lower', cmap='viridis', interpolation='none', vmin=self.vmin, vmax=self.vmax)
+        self.ax_main.imshow(self.masked_ds, aspect='auto', origin='lower', cmap=self.cmap, interpolation='none', vmin=self.vmin, vmax=self.vmax)
         self.ax_main.set_xlim([0, self.masked_ds.shape[1]])
         self.ax_main.set_xlabel('Time bins')
         self.ax_main.set_ylabel('Frequency channels') 
@@ -399,8 +402,11 @@ class BurstAnalyzer:
         # Hide some tick labels
         plt.setp(self.ax_space.get_xticklabels(), visible=False)
         plt.setp(self.ax_space.get_yticklabels(), visible=False)
+        plt.setp(self.ax_top.get_xticklabels(), visible=False)
+        plt.setp(self.ax_top.get_yticklabels(), visible=False)
         plt.setp(self.ax_right.get_yticklabels(), visible=False)
         plt.setp(self.ax_right.get_yticklabels(), visible=False)
+
 
 
     # Create stage 2 button functions
@@ -427,16 +433,16 @@ class BurstAnalyzer:
 
     def on_colour(self, event):
         #cycle through some colormaps
-        current_cmap = self.ax_main.images[0].get_cmap().name
-        if current_cmap == 'seismic':
-            new_cmap = 'viridis'
-        elif current_cmap == 'viridis':
-            new_cmap = 'bone'
-        elif current_cmap == 'bone':
-            new_cmap = 'seismic'
+        if self.cmap == 'seismic':
+            self.cmap = 'viridis'
+        elif self.cmap == 'viridis':
+            self.cmap = 'bone'
+        elif self.cmap == 'bone':
+            self.cmap = 'gist_rainbow'
+        elif self.cmap == 'gist_rainbow':
+            self.cmap = 'seismic'
         else:
-            new_cmap = 'viridis'
-        self.ax_main.images[0].set_cmap(new_cmap)
+            self.cmap = 'viridis'
         self.update_plot()
 
     def on_next_from_flag(self, event):
@@ -510,7 +516,8 @@ class BurstAnalyzer:
         # Hide some tick labels
         plt.setp(self.ax_space.get_xticklabels(), visible=False)
         plt.setp(self.ax_space.get_yticklabels(), visible=False)
-        plt.setp(self.ax_right.get_yticklabels(), visible=False)
+        self.ax_space.tick_params(axis='y', which='both', labelleft=False)
+        plt.setp(self.ax_right.get_xticklabels(), visible=False)
         plt.setp(self.ax_right.get_yticklabels(), visible=False)
 
     # compute burst properties
@@ -554,7 +561,7 @@ class BurstAnalyzer:
                     f"Spectral extent: {self.freqs[self.spec_ex_hi] - self.freqs[self.spec_ex_lo]} MHz \n"
                     f"MJD @ peak: {self.MJD} \n"
                     f"MJD offset: {np.round(self.MJD_offset, 3)} ms")
-        self.ax_space.text(0., 0.95, annotation, transform=self.ax_space.transAxes,
+        self.ax_space.text(0., 0.98, annotation, transform=self.ax_space.transAxes,
                         fontsize=10, color='white', verticalalignment='top',
                         bbox=dict(facecolor='black', alpha=1))
         self.figure.canvas.draw_idle()
@@ -592,19 +599,19 @@ class BurstAnalyzer:
         self.figure.canvas.draw_idle()
 
     # Create stage 3 button functions
-    def on_save(self, event, MJD, MJD_offset, t_peak_positions, peak_flux, fluence_Jyms, iso_E, event_duration):
+    def on_save(self, event):
         # create a dictionary for the current burst
         burst_props = {}
         # fill it with knowledge
-        burst_props["MJD_at_peak"] = MJD
-        burst_props["MJD_offset_ms"] = MJD_offset
-        burst_props["peak_positions_ms"] = t_peak_positions
+        burst_props["MJD_at_peak"] = self.MJD
+        burst_props["MJD_offset_ms"] = self.MJD_offset
+        burst_props["peak_positions_ms"] = self.t_peak_positions
 
-        burst_props["peak_flux"] = peak_flux
-        burst_props["fluence_Jyms"] = fluence_Jyms
-        burst_props["iso_E"] = iso_E
+        burst_props["peak_flux"] = self.peak_flux
+        burst_props["fluence_Jyms"] = self.fluence_Jyms
+        burst_props["iso_E"] = self.iso_E
 
-        burst_props["event_duration_ms"] = event_duration
+        burst_props["event_duration_ms"] = self.event_duration
         burst_props["spectral_extent_MHz"] = self.freqs[self.spec_ex_hi] - self.freqs[self.spec_ex_lo]
 
         
