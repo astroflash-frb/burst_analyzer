@@ -140,6 +140,7 @@ class BurstAnalyzer:
 
         # "Stage 3: compute" defaults
         self.plus_mjd_sec_updated = None # to recalulculate the TOA at the selected peaks, move to stage 1?
+        self.t_peak_positions = []
 
         # The current stage: "preview", "flag", or "compute".
         self.stage = "preview"
@@ -458,7 +459,7 @@ class BurstAnalyzer:
         t_event_start = self.event_start * self.tsamp * 1000  # in ms now
         t_event_end = self.event_end * self.tsamp * 1000  # in ms now
         new_crop_start = self.crop_start // self.time_factor
-        t_peak_positions = [((pp // self.time_factor) - new_crop_start) * self.tsamp * 1000 for pp in self.peak_positions]
+        self.t_peak_positions = [((pp // self.time_factor) - new_crop_start) * self.tsamp * 1000 for pp in self.peak_positions]
         
         #plot
         # vmin = np.quantile(self.masked_ds, 0.01)
@@ -484,7 +485,7 @@ class BurstAnalyzer:
      #       self.ax_top.fill_between([start/self.time_factor, end/self.time_factor], 0, 1, color='orange', alpha = 0.3, transform=self.ax_top.get_xaxis_transform())
 
 
-        for t in t_peak_positions: 
+        for t in self.t_peak_positions: 
             self.ax_top.axvline(t, ls='--', color='red', lw=1)
         self.ax_top.set_ylabel('S/N')
         # plot side panel
@@ -505,8 +506,7 @@ class BurstAnalyzer:
         self.btn_save = Button(ax_btn_save, 'Save')
         self.btn_nextburst = Button(ax_btn_nextburst, 'Next Burst')
         self.btn_properties = Button(ax_btn_properties, 'Burst Properties')
-        self.btn_save.on_clicked(lambda event: self.on_save(event, MJD=self.MJD, MJD_offset=self.MJD_offset, t_peak_positions=t_peak_positions, peak_flux=self.peak_flux, \
-                                              fluence_Jyms=self.fluence_Jyms, iso_E=self.iso_E, event_duration=self.event_duration ))
+        self.btn_save.on_clicked(self.on_save)
         self.btn_nextburst.on_clicked(self.on_nextburst)
         self.btn_properties.on_clicked(self.get_burst_properties)
         
@@ -516,7 +516,7 @@ class BurstAnalyzer:
         # Hide some tick labels
         plt.setp(self.ax_space.get_xticklabels(), visible=False)
         plt.setp(self.ax_space.get_yticklabels(), visible=False)
-        self.ax_space.tick_params(axis='y', which='both', labelleft=False)
+        self.ax_space.tick_params(axis='y', which='both', length=0)
         plt.setp(self.ax_right.get_xticklabels(), visible=False)
         plt.setp(self.ax_right.get_yticklabels(), visible=False)
 
@@ -617,6 +617,7 @@ class BurstAnalyzer:
         
         burst_name = self.burst_file.split('.fil')[0].split('/')[-1]
         
+        print(burst_props)
         burst_database[burst_name] = burst_props
         print(f"Burst properties saved for {burst_name}") 
 
