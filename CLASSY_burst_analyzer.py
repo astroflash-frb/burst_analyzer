@@ -841,6 +841,7 @@ if __name__ == "__main__":
         data, metadata = load_burst(burst_file,args.dm,args.telescope)
         analyzer = BurstAnalyzer(data, metadata, burst_file, args)
         analyzer.run()
+        np.savez_compressed("burst_database.npz",**burst_database)
     elif args.Bfiles:
         try:
             with open(args.Bfiles, 'r') as f:
@@ -850,6 +851,7 @@ if __name__ == "__main__":
                         data, metadata = load_burst(burst_file,args.dm,args.telescope)
                         analyzer = BurstAnalyzer(data, metadata, burst_file, args)
                         analyzer.run()
+                        np.savez_compressed("burst_database.npz",**burst_database)
         except Exception as e:
             print(f"Error reading file {args.Bfiles}: {e}")
             sys.exit(1)
@@ -858,5 +860,4 @@ if __name__ == "__main__":
         sys.exit(1)
  
     #export dictionary
-    np.savez_compressed("burst_database.npz",**burst_database)
     
