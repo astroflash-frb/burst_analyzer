@@ -16,11 +16,10 @@ from astropy import units as u
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Button
-
+import pandas as pd
 #fancier packages/custom scripts
 import basic_funcs
 import your
-sys.path.append("/opt/homebrew/lib/python3.9/site-packages")
 import jess.channel_masks
 from pathlib import Path
 from scipy.optimize import curve_fit
@@ -113,7 +112,17 @@ class BurstAnalyzer:
         self.args = args
         self.vmin = np.quantile(data, 0.01)
         self.vmax = np.quantile(data, 0.99)
-                
+        
+        # Initialize DataFrame for burst properties
+        if args.burst_df:
+            self.burst_df = pd.read_csv(args.burst_df)
+        else:
+            args.burst_df = 'burst_properties.csv'
+            self.burst_df = pd.DataFrame(columns=[
+                "burst_name", "MJD_at_peak", "MJD_offset_ms", "peak_positions_ms",
+                "peak_flux", "fluence_Jyms", "iso_E", "event_duration_ms", "spectral_extent_MHz"
+            ])
+        
         # "Stage 1: preview burst" defaults and variables
         self.time_factor = 1
         self.freq_factor = 1
@@ -200,6 +209,8 @@ class BurstAnalyzer:
     # STAGE 1 PREVIEW
     def draw_preview(self):
         # downsample and crop data
+        if self.data.shape[1] % 2 != 0: # make sure the data is even for downsampling
+            self.data = self.data[:,:-1]
         ds_full = basic_funcs.decimate_2d(arr=self.data, tfac=self.time_factor, ffac=self.freq_factor)
         new_crop_start = self.crop_start // self.time_factor
         new_crop_end = self.crop_end // self.time_factor
@@ -215,8 +226,8 @@ class BurstAnalyzer:
         self.ax_main.set_ylabel('Frequency channels') 
         # plot top panel
         self.ax_top.plot(np.arange(ds.shape[1]), ds.sum(axis=0), drawstyle='steps-mid', color='k')
-        self.ax_top.axvline(self.event_start // self.time_factor, color='darkviolet', lw=1)
-        self.ax_top.axvline(self.event_end // self.time_factor, color='darkviolet', lw=1)
+        self.ax_top.axvline(self.event_start / self.time_factor, color='darkviolet', lw=1)
+        self.ax_top.axvline(self.event_end / self.time_factor, color='darkviolet', lw=1)
         for region in self.burst_regions:
             start, end = region
             self.ax_top.fill_between([start/self.time_factor, end/self.time_factor], 0, 1, color='orange', alpha = 0.3, transform=self.ax_top.get_xaxis_transform())
@@ -227,8 +238,9 @@ class BurstAnalyzer:
         # auto-detect a peak
         if not self.manual_peaks:
             peak_disp = np.argmax(np.nansum(ds, axis=0))
-            peak_og = (peak_disp + self.crop_start) * self.time_factor
+            peak_og = (peak_disp + new_crop_start) * self.time_factor
             self.peak_positions = [peak_og]
+            print(peak_og)
         # plot red lines at the peaks
         for p in self.peak_positions:
             p_disp = (p // self.time_factor) - new_crop_start
@@ -427,9 +439,11 @@ class BurstAnalyzer:
     def on_jess(self, event):
         offburst = np.concatenate((self.masked_ds[:, :self.event_start],
                                    self.masked_ds[:, self.event_end:]), axis=1) # define the offburst region for jess
-        self.masked_channels = jess.channel_masks.channel_masker(dynamic_spectra=offburst.T, test='skew', sigma=3, show_plots=False)
-        for idx, mask in enumerate(self.masked_channels):
-            self.masked_ds.mask[idx, :] = mask
+        bool_mask = jess.channel_masks.channel_masker(dynamic_spectra=offburst.T, test='skew', sigma=3, show_plots=False)
+        for idx, bool in enumerate(bool_mask):
+            if bool and idx not in self.masked_channels:
+                self.masked_channels = np.append(self.masked_channels,idx)
+                self.masked_ds.mask[idx, :] = True
         self.update_plot()
 
     def on_colour(self, event):
@@ -456,8 +470,8 @@ class BurstAnalyzer:
         self.clear_buttons()
         # convert timebinsand vertical lines in top panel to milliseconds
         zero_time_range = np.linspace(0, self.masked_ds.shape[1] * self.tsamp * 1000, self.masked_ds.shape[1])
-        t_event_start = self.event_start * self.tsamp * 1000  # in ms now
-        t_event_end = self.event_end * self.tsamp * 1000  # in ms now
+        t_event_start = self.event_start // self.time_factor * self.tsamp * 1000  # in ms now
+        t_event_end = self.event_end // self.time_factor * self.tsamp * 1000  # in ms now
         new_crop_start = self.crop_start // self.time_factor
         self.t_peak_positions = [((pp // self.time_factor) - new_crop_start) * self.tsamp * 1000 for pp in self.peak_positions]
         
@@ -585,13 +599,6 @@ class BurstAnalyzer:
         
         fitted_gaussian = basic_funcs.gaussian_2d((xx, yy), *popt).reshape(array.shape)
 
-        # # Clear previous Gaussian lines
-        # for line in self.ax_top.get_lines():
-        #     line.remove()
-        # for line in self.ax_right.get_lines():
-        #     line.remove()
-        # for contour in self.ax_main.collections:
-        #     contour.remove()
         timeseries_scaling = np.max(self.prof) / np.max(np.nanmean(array, axis=0))
         self.ax_main.contour(xx, yy, fitted_gaussian, levels=[np.max(fitted_gaussian)/2], colors='red')
         self.ax_top.plot(x, np.mean(fitted_gaussian, axis=0) * timeseries_scaling, color='red', linestyle='--')
@@ -601,25 +608,31 @@ class BurstAnalyzer:
     # Create stage 3 button functions
     def on_save(self, event):
         # create a dictionary for the current burst
-        burst_props = {}
-        # fill it with knowledge
-        burst_props["MJD_at_peak"] = self.MJD
-        burst_props["MJD_offset_ms"] = self.MJD_offset
-        burst_props["peak_positions_ms"] = self.t_peak_positions
-
-        burst_props["peak_flux"] = self.peak_flux
-        burst_props["fluence_Jyms"] = self.fluence_Jyms
-        burst_props["iso_E"] = self.iso_E
-
-        burst_props["event_duration_ms"] = self.event_duration
-        burst_props["spectral_extent_MHz"] = self.freqs[self.spec_ex_hi] - self.freqs[self.spec_ex_lo]
-
+        burst_props = {
+            "burst_name": Path(self.burst_file).stem,
+            "MJD_at_peak": self.MJD,
+            "MJD_offset_ms": self.MJD_offset,
+            "peak_positions_ms": self.t_peak_positions,
+            "peak_flux": self.peak_flux,
+            "fluence_Jyms": self.fluence_Jyms,
+            "iso_E": self.iso_E,
+            "event_duration_ms": self.event_duration,
+            "spectral_extent_MHz": self.freqs[self.spec_ex_hi] - self.freqs[self.spec_ex_lo]
+        }
         
-        burst_name = self.burst_file.split('.fil')[0].split('/')[-1]
-        
-        print(burst_props)
-        burst_database[burst_name] = burst_props
-        print(f"Burst properties saved for {burst_name}") 
+        # Check if burst name already exists in the DataFrame
+        if burst_props["burst_name"] in self.burst_df["burst_name"].values:
+            print(f"Burst properties for {burst_props['burst_name']} already exist. Skipping save.")
+
+        else:
+            # Append the burst properties to the DataFrame
+            self.burst_df = pd.concat([self.burst_df, pd.DataFrame([burst_props])], ignore_index=True)
+
+            # Save the DataFrame to a CSV file
+            self.burst_df.to_csv(self.args.burst_df, index=False)
+
+            print(f"Burst properties saved for {burst_props['burst_name']}")
+
 
     def on_nextburst(self, event):
         plt.close()
@@ -650,6 +663,7 @@ class BurstAnalyzer:
                             self.event_start = self.event_start - new_crop_start #also update the onburst lines
                             self.event_end = self.event_end - new_crop_start
                             self.burst_regions = [(start - new_crop_start, end - new_crop_start) for start,end in self.burst_regions]
+                            self.peak_positions = [p - new_crop_start for p in self.peak_positions]
                             if args.verbose:
                                 print(f"New crop from og timebin {self.crop_start} to {self.crop_end}")
                             self.crop_clicks = []
@@ -826,9 +840,9 @@ if __name__ == "__main__":
                         help="redshift to source.",required=False)
     parser.add_argument("-v", "--verbose", action="store_true", 
                         help="Increase output verbosity")
+    parser.add_argument("-s", "--burst_df", type=str,
+                        help="Path to an existing burst properties CSV file", required=False)
     args = parser.parse_args()
-    import matplotlib
-    print(matplotlib.get_backend())
     #create dictionary for all burst's properties, check verbosity
     global verbose, burst_database
     burst_database ={}
