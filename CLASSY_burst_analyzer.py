@@ -15,7 +15,7 @@ import sys
 from astropy import units as u
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.widgets import Button
+from matplotlib.widgets import Button, TextBox
 import pandas as pd
 #fancier packages/custom scripts
 import basic_funcs
@@ -276,7 +276,10 @@ class BurstAnalyzer:
         ax_btn_fd = self.figure.add_axes([0.21, 0.95, 0.1, 0.04])
         ax_btn_fu = self.figure.add_axes([0.21, 0.9, 0.1, 0.04])
         ax_btn_rr = self.figure.add_axes([0.4, 0.95, 0.1, 0.04])
-        ax_btn_n1 = self.figure.add_axes([0.4, 0.9, 0.1, 0.04])
+        ax_btn_dm = self.figure.add_axes([0.4, 0.9, 0.1, 0.04])
+        ax_text_dm = self.figure.add_axes([0.51, 0.9, 0.1, 0.04])
+        ax_btn_n1 = self.figure.add_axes([0.6, 0.95, 0.1, 0.04])
+
         self.btn_td = Button(ax_btn_td, 'Time Down') 
         self.btn_td.on_clicked(self.on_timeres_down)
         self.btn_tu = Button(ax_btn_tu, 'Time Up') 
@@ -289,8 +292,11 @@ class BurstAnalyzer:
         self.btn_rr. on_clicked(self.on_reset_preview)
         self.btn_n1 = Button(ax_btn_n1, 'Next') 
         self.btn_n1.on_clicked(self.on_next_from_preview)
-        self.button_cids.extend([self.btn_td, self.btn_tu, self.btn_fd, self.btn_fu, self.btn_rr, self.btn_n1])
-        self.button_axes.extend([ax_btn_td, ax_btn_tu, ax_btn_fd, ax_btn_fu, ax_btn_rr, ax_btn_n1])
+        self.btn_dm = Button(ax_btn_dm, 'Set DM') 
+        self.btn_dm.on_clicked(self.on_set_dm)
+        self.text_dm = TextBox(ax_text_dm, '', initial=str(self.args.dm))
+        self.button_cids.extend([self.btn_td, self.btn_tu, self.btn_fd, self.btn_fu, self.btn_rr, self.btn_n1, self.btn_dm, self.text_dm])
+        self.button_axes.extend([ax_btn_td, ax_btn_tu, ax_btn_fd, ax_btn_fu, ax_btn_rr, ax_btn_n1, ax_btn_dm, ax_text_dm])
         
         # Hide some tick labels
         plt.setp(self.ax_space.get_xticklabels(), visible=False)
@@ -341,7 +347,14 @@ class BurstAnalyzer:
      self.stage = "flag"
      self.update_plot() 
 
-
+    def on_set_dm(self, event):
+        new_dm = float(self.text_dm.text)
+        if new_dm is not None:
+            self.data = basic_funcs.dedisperse(self.data, -self.args.dm, self.freqs, self.tsamp)
+            self.args.dm = new_dm
+            self.data = basic_funcs.dedisperse(self.data, self.args.dm, self.freqs, self.tsamp)
+            self.update_plot()
+            
     # STAGE 2 FLAG
     def draw_flag(self):
         if self.masked_ds is None:
@@ -543,12 +556,12 @@ class BurstAnalyzer:
             start, end = region
             xdata = zero_time_range[start:end]
             ydata = self.prof[start:end]
-            initial_guess = (np.max(ydata), zero_time_range[start+np.argmax(ydata)], (end-start)/2*self.tsamp*1000) #/2 is somewhat arbitrary
+            initial_guess = (np.max(ydata), xdata[np.argmax(ydata)], (xdata[1]-xdata[0])/2, 0) #/2 is somewhat arbitrary
             print('p0 for ',region)
-            print(initial_guess)
-            popt, _ = curve_fit(basic_funcs.gaussian_1d, xdata, ydata, p0 = initial_guess, maxfev=10000)
+            bounds = ([0, xdata[0], 0, -10], [np.inf, xdata[-1], xdata[-1]-xdata[0], 10])
+            popt, _ = curve_fit(basic_funcs.gaussian_1d, xdata, ydata, p0 = initial_guess, bounds=bounds, maxfev=10000)
             print('fit for ',region)
-            print(popt)
+            print(initial_guess, popt)
             self.ax_top.plot(xdata, basic_funcs.gaussian_1d(xdata,*popt), color='red')
         
         # ToA
@@ -580,28 +593,32 @@ class BurstAnalyzer:
                         bbox=dict(facecolor='black', alpha=1))
         self.figure.canvas.draw_idle()
     
+    def fit_gaussian_1d(self, xdata, ydata, initial_guess):
+        bounds = ([0, xdata[0], 0, -10], [np.inf, xdata[-1], xdata[-1]-xdata[0], 10])
+        popt, _ = curve_fit(basic_funcs.gaussian_1d, xdata, ydata, p0=initial_guess, bounds=bounds)
+        return popt
+    
     def fit_gaussian_2d(self, array, initial_guess):
         x = np.arange(array.shape[1]) * self.tsamp*1e3
         y = np.linspace(self.freqs[0], self.freqs[-1], array.shape[0])
         xx, yy = np.meshgrid(x, y)
         xdata = np.vstack((xx.ravel(), yy.ravel()))
         ydata = array.ravel()
-        timeseries = np.mean(array, axis=0)
-        spectra = np.mean(array, axis=1)
-        initial_guess = (x[np.argmax(timeseries)], y[np.argmax(spectra)], 1000, 100, np.max(array), 0)
-        popt, _ = curve_fit(basic_funcs.gaussian_2d, xdata, ydata, p0=initial_guess)
+        bounds = ([0, x[0], y[0], 0, 0, -10], [np.inf, x[-1], y[-1], x[-1]-x[0], y[-1]-y[0], 10])
+        print(initial_guess, bounds)
+        popt, _ = curve_fit(basic_funcs.gaussian_2d, xdata, ydata, p0=initial_guess, bounds=bounds)
         return popt
     
-    def plot_gaussian_fit(self, array, popt):
+    def plot_2d_gaussian_fit(self, array, popt):
         x = np.arange(array.shape[1]) * self.tsamp*1e3
         y = np.linspace(self.freqs[0], self.freqs[-1], array.shape[0])
         xx, yy = np.meshgrid(x, y)
         
         fitted_gaussian = basic_funcs.gaussian_2d((xx, yy), *popt).reshape(array.shape)
-
-        timeseries_scaling = np.max(self.prof) / np.max(np.nanmean(array, axis=0))
+        # scaling to match the normalized timeseries/spectrum
+        # top_scaling = np.max(self.prof) / np.max(fitted_gaussian)
         self.ax_main.contour(xx, yy, fitted_gaussian, levels=[np.max(fitted_gaussian)/2], colors='red')
-        self.ax_top.plot(x, np.mean(fitted_gaussian, axis=0) * timeseries_scaling, color='red', linestyle='--')
+        self.ax_top.plot(x, np.mean(fitted_gaussian, axis=0), color='red', linestyle='--')
         self.ax_right.plot(np.mean(fitted_gaussian, axis=1), y, color='red', linestyle='--')
         self.figure.canvas.draw_idle()
 
@@ -794,27 +811,35 @@ class BurstAnalyzer:
                 x = int(np.round(event.xdata))
                 y = int(np.round(event.ydata))
                 if x is not None and y is not None:
+                    xdata = np.arange(self.masked_ds.shape[1]) * self.tsamp*1e3
+                    ydata = np.linspace(self.freqs[0], self.freqs[-1], self.masked_ds.shape[0])
                     acf = basic_funcs.acf_2d(self.masked_ds)
                     timeseries = np.mean(acf, axis=0)
                     spectra = np.mean(acf, axis=1)
-                    initial_guess = (np.argmax(timeseries), np.argmax(spectra), 1000, 10, np.max(acf), 0)
                     print('starting acf fit')
+                    initial_guess = (np.max(acf), xdata[np.argmax(timeseries)], ydata[np.argmax(spectra)],
+                                     5, 50, 0)
                     popt_acf = self.fit_gaussian_2d(acf, initial_guess) 
-                    print(popt_acf)
                     timeseries = np.mean(self.masked_ds, axis=0)
                     spectra = np.mean(self.masked_ds, axis=1)
-                    print(x,y)
-                    param_bounds = ([0, self.freqs[0], 0, 0, 0, -1], [np.inf, self.freqs[-1], 1000, self.freqs[-1], np.inf, 1])
-                    initial_guess = (x, y, 1000, 10, np.max(self.masked_ds), 0)
-                    # initial_guess = (np.argmax(timeseries), np.argmax(spectra), 1000, 10, np.max(self.masked_ds), 0)
+
                     print('starting ds fit')
-                    popt_ds = self.fit_gaussian_2d(self.masked_ds, initial_guess)
-                    print(popt_ds)
+                    xdata = np.arange(self.masked_ds.shape[1]) * self.tsamp*1e3
+                    ydata = np.linspace(self.freqs[0], self.freqs[-1], self.masked_ds.shape[0])
+                    initial_guess = (np.max(self.masked_ds), x, popt_acf[3]/np.sqrt(2), 0)
+                    poptx = self.fit_gaussian_1d(xdata, timeseries, initial_guess)
+                    print(initial_guess)
+                    initial_guess = (np.max(self.masked_ds), y, popt_acf[4]/np.sqrt(2), 0)
+                    print(initial_guess)
+                    popty = self.fit_gaussian_1d(ydata, spectra, initial_guess)
+                    # popt_ds = self.fit_gaussian_2d(self.masked_ds, initial_guess)
+                    
                     # Combine parameters: center and amplitude from ds, widths from acf adjusted by sqrt(2)
-                    combined_popt = (popt_ds[0], popt_ds[1], popt_acf[2] / np.sqrt(2), popt_acf[3] / np.sqrt(2), 
-                                     popt_ds[4], popt_ds[5])
+                    combined_popt = (np.max(self.masked_ds), poptx[1], popty[1], popt_acf[3] / np.sqrt(2), 
+                                     popt_acf[4] / np.sqrt(2), 0)
+                    
                     print('plotting', combined_popt)
-                    self.plot_gaussian_fit(self.masked_ds, combined_popt)
+                    self.plot_2d_gaussian_fit(self.masked_ds, combined_popt)
 
     def run(self):
         plt.show()
