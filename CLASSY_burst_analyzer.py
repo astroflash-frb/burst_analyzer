@@ -615,11 +615,14 @@ class BurstAnalyzer:
         xx, yy = np.meshgrid(x, y)
         
         fitted_gaussian = basic_funcs.gaussian_2d((xx, yy), *popt).reshape(array.shape)
-        # scaling to match the normalized timeseries/spectrum
-        # top_scaling = np.max(self.prof) / np.max(fitted_gaussian)
-        self.ax_main.contour(xx, yy, fitted_gaussian, levels=[np.max(fitted_gaussian)/2], colors='red')
-        self.ax_top.plot(x, np.mean(fitted_gaussian, axis=0), color='red', linestyle='--')
-        self.ax_right.plot(np.mean(fitted_gaussian, axis=1), y, color='red', linestyle='--')
+        spectrum = np.mean(fitted_gaussian, axis=1)
+        # Fit 1D Gaussian to normalized timeseries for proper scaling
+        poptx = self.fit_gaussian_1d(x, self.prof, initial_guess=(np.max(self.prof), popt[1], popt[3], 0))
+        print(poptx)
+        timeseries = basic_funcs.gaussian_1d(x, *poptx)
+        self.ax_main.contour(xx, yy, fitted_gaussian, levels=[np.max(fitted_gaussian)*0.05, np.max(fitted_gaussian)*0.34])
+        self.ax_top.plot(x, timeseries, color='red', linestyle='--')
+        self.ax_right.plot(spectrum, y, color='red', linestyle='--')
         self.figure.canvas.draw_idle()
 
     # Create stage 3 button functions
@@ -833,7 +836,6 @@ class BurstAnalyzer:
                     print(initial_guess)
                     popty = self.fit_gaussian_1d(ydata, spectra, initial_guess)
                     # popt_ds = self.fit_gaussian_2d(self.masked_ds, initial_guess)
-                    
                     # Combine parameters: center and amplitude from ds, widths from acf adjusted by sqrt(2)
                     combined_popt = (np.max(self.masked_ds), poptx[1], popty[1], popt_acf[3] / np.sqrt(2), 
                                      popt_acf[4] / np.sqrt(2), 0)

@@ -2,14 +2,9 @@ To-Fix:
 - double check all the calculations, e.g. fluence, energy, etc
 - convert the toas to barycentric?
 - better normalization (normalise vs normalize in basic funcs)
-
-- improve acf/gaussian fitting initial parameters (bounds help but slows down code a lot)
-    - test separate 1d fits instead of 2d
-    - stage 3: only timeseries is normalized which causes scaling differences from the fits
-
 - preview and flag stage: remove ax_space and ax_right ticks/labels
 - burst properties in pandas df should be from acf
-- move event/burst region clicks to stage 2 (can't really see weak bursts well until after flagging)
+- swap stage 1/2 (flag first then crop/outline bursts)
 
 Done: (test/check and remove from list)
 - add a check so that the dynamic spectrum is the correct shape to downsample
@@ -17,3 +12,6 @@ Done: (test/check and remove from list)
 - Created DataFrame with csv output for burst properties
 - compute stage: the event duration lines dont update with tsamp changes
 - added adjustable DM via textbox in stage 1
+- improve acf/gaussian fitting initial parameters
+    - test separate 1d fits instead of 2d
+    - stage 3: only timeseries is normalized which causes scaling differences from the fits
