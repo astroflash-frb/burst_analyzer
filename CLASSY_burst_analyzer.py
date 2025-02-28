@@ -209,41 +209,33 @@ class BurstAnalyzer:
     # STAGE 1 PREVIEW
     def draw_preview(self):
         # downsample and crop data
-        if self.data.shape[1] % 2 != 0: # make sure the data is even for downsampling
-            self.data = self.data[:,:-1]
-        ds_full = basic_funcs.decimate_2d(arr=self.data, tfac=self.time_factor, ffac=self.freq_factor)
-        new_crop_start = self.crop_start // self.time_factor
-        new_crop_end = self.crop_end // self.time_factor
-        ds = ds_full[:, new_crop_start:new_crop_end]
-        
-        
+        if self.masked_ds is None:
+            self.masked_ds = self.data.copy()
+           
         # plot main panel
-        # vmin = np.quantile(ds, 0.01)
-        # vmax = np.quantile(ds, 0.99)
-        self.ax_main.imshow(ds, aspect='auto', origin='lower', cmap='viridis', interpolation='none', vmin=self.vmin, vmax=self.vmax)
-        self.ax_main.set_xlim([0, ds.shape[1]])
+        self.ax_main.imshow(self.masked_ds, aspect='auto', origin='lower', cmap='viridis', interpolation='none', vmin=self.vmin, vmax=self.vmax)
+        self.ax_main.set_xlim([0, self.masked_ds.shape[1]])
         self.ax_main.set_xlabel('Time bins')
         self.ax_main.set_ylabel('Frequency channels') 
         # plot top panel
-        self.ax_top.plot(np.arange(ds.shape[1]), ds.sum(axis=0), drawstyle='steps-mid', color='k')
+        self.ax_top.plot(np.arange(self.masked_ds.shape[1]), self.masked_ds.sum(axis=0), drawstyle='steps-mid', color='k')
         self.ax_top.axvline(self.event_start / self.time_factor, color='darkviolet', lw=1)
         self.ax_top.axvline(self.event_end / self.time_factor, color='darkviolet', lw=1)
         for region in self.burst_regions:
             start, end = region
             self.ax_top.fill_between([start/self.time_factor, end/self.time_factor], 0, 1, color='orange', alpha = 0.3, transform=self.ax_top.get_xaxis_transform())
         # plot side panel
-        self.ax_right.plot(ds.sum(axis=1), np.arange(ds.shape[0]), drawstyle='steps-mid', color='k')
+        self.ax_right.plot(self.masked_ds.sum(axis=1), np.arange(self.masked_ds.shape[0]), drawstyle='steps-mid', color='k')
         
         
         # auto-detect a peak
         if not self.manual_peaks:
-            peak_disp = np.argmax(np.nansum(ds, axis=0))
-            peak_og = (peak_disp + new_crop_start) * self.time_factor
+            peak_disp = np.argmax(np.nansum(self.masked_ds, axis=0))
+            peak_og = (peak_disp + self.crop_start) * self.time_factor
             self.peak_positions = [peak_og]
-            print(peak_og)
         # plot red lines at the peaks
         for p in self.peak_positions:
-            p_disp = (p // self.time_factor) - new_crop_start
+            p_disp = (p // self.time_factor) - self.crop_start
             self.ax_top.axvline(p_disp, ls='--', color='red', lw=1)
         # update the TOA with the first peak position
         if self.peak_positions:
@@ -310,20 +302,32 @@ class BurstAnalyzer:
     # Create stage 1 button functions
     def on_timeres_down(self, event):
         self.time_factor *= 2
+        splice = self.data.shape[1]-self.data.shape[1]%self.time_factor
+        array = self.data[:,:splice]
+        self.masked_ds = basic_funcs.decimate_2d(arr=array, tfac=self.time_factor, ffac=self.freq_factor)
         self.update_plot()
 
     def on_timeres_up(self, event):
         if self.time_factor > 1:
             self.time_factor //= 2
+        splice = self.data.shape[1]-self.data.shape[1]%self.time_factor
+        array = self.data[:,:splice]
+        self.masked_ds = basic_funcs.decimate_2d(arr=array, tfac=self.time_factor, ffac=self.freq_factor)
         self.update_plot()
 
     def on_freqres_down(self, event):
         self.freq_factor *= 2
+        splice = self.data.shape[0]-self.data.shape[0]%self.freq_factor
+        array = self.data[:splice,:]
+        self.masked_ds = basic_funcs.decimate_2d(arr=array, tfac=self.time_factor, ffac=self.freq_factor)
         self.update_plot()
 
     def on_freqres_up(self, event):
         if self.freq_factor > 1:
             self.freq_factor //= 2
+        splice = self.data.shape[0]-self.data.shape[0]%self.freq_factor
+        array = self.data[:splice,:]
+        self.masked_ds = basic_funcs.decimate_2d(arr=array, tfac=self.time_factor, ffac=self.freq_factor)
         self.update_plot()
 
     def on_reset_preview(self, event): # see __init__ for more info
@@ -333,6 +337,7 @@ class BurstAnalyzer:
         self.crop_end = self.data.shape[1]
         self.event_start = 2 * (self.data.shape[1] // 10)
         self.event_end = 3 * (self.data.shape[1] // 10)
+        self.masked_ds = None
         
         self.peak_positions = []
         self.burst_regions = []
@@ -343,30 +348,27 @@ class BurstAnalyzer:
         self.update_plot()
         
     def on_next_from_preview(self, event):
-    #Move to Stage 2: RFI flagging,
-     self.stage = "flag"
-     self.update_plot() 
+        #Move to Stage 2: RFI flagging,
+        self.stage = "flag"
+        self.masked_ds = np.ma.masked_array(self.masked_ds, mask=np.zeros(self.masked_ds.shape, dtype=bool), fill_value=np.nan)
+        self.update_plot() 
 
     def on_set_dm(self, event):
+        # Set time/frequency resolution back to original
+        self.time_factor = 1
+        self.freq_factor = 1
+        self.masked_ds = basic_funcs.decimate_2d(arr=self.data, tfac=self.time_factor, ffac=self.freq_factor)
         new_dm = float(self.text_dm.text)
         if new_dm is not None:
+            self.masked_data = basic_funcs.dedisperse(self.masked_ds, -self.args.dm, self.freqs, self.tsamp)
+            self.masked_data = basic_funcs.dedisperse(self.masked_ds, new_dm, self.freqs, self.tsamp)
             self.data = basic_funcs.dedisperse(self.data, -self.args.dm, self.freqs, self.tsamp)
+            self.data = basic_funcs.dedisperse(self.data, new_dm, self.freqs, self.tsamp)
             self.args.dm = new_dm
-            self.data = basic_funcs.dedisperse(self.data, self.args.dm, self.freqs, self.tsamp)
             self.update_plot()
             
     # STAGE 2 FLAG
     def draw_flag(self):
-        if self.masked_ds is None:
-            # get the data in the resolution/cropping from preview
-            ds_full = basic_funcs.decimate_2d(arr=self.data, tfac=self.time_factor, ffac=self.freq_factor)
-            new_crop_start = self.crop_start // self.time_factor
-            new_crop_end = self.crop_end // self.time_factor
-            ds = ds_full[:, new_crop_start:new_crop_end]
-            # set up an empty mask and stage 2 defaults
-            self.masked_ds = np.ma.masked_array(ds, mask=np.zeros(ds.shape, dtype=bool), fill_value=np.nan)
-            self.masked_channels = []
-            
         new_crop_start = self.crop_start // self.time_factor
         new_crop_end = self.crop_end // self.time_factor
         
@@ -678,12 +680,13 @@ class BurstAnalyzer:
                         new_crop_start, new_crop_end = sorted(self.crop_clicks)
                         if new_crop_end > new_crop_start: # some validation
                             old_crop_start = self.crop_start #save the current crop start for the offset calc
-                            self.crop_start = old_crop_start + new_crop_start
-                            self.crop_end = old_crop_start + new_crop_end
-                            self.event_start = self.event_start - new_crop_start #also update the onburst lines
+                            self.crop_start = (old_crop_start + new_crop_start) // self.time_factor
+                            self.crop_end = (old_crop_start + new_crop_end) // self.time_factor
+                            self.event_start = (self.event_start - new_crop_start) // self.time_factor #also update the onburst lines
                             self.event_end = self.event_end - new_crop_start
                             self.burst_regions = [(start - new_crop_start, end - new_crop_start) for start,end in self.burst_regions]
                             self.peak_positions = [p - new_crop_start for p in self.peak_positions]
+                            self.masked_ds = self.masked_ds[:, self.crop_start:self.crop_end]
                             if args.verbose:
                                 print(f"New crop from og timebin {self.crop_start} to {self.crop_end}")
                             self.crop_clicks = []

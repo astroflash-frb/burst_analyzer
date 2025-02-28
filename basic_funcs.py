@@ -116,10 +116,10 @@ def radiometer(tsamp, bw, npol, SEFD):
 def acf_2d(array):
     return fftconvolve(array, array[::-1, ::-1], mode='same')
 
-def gaussian_2d(xy, x0, y0, sigma_x, sigma_y, A, offset):
+def gaussian_2d(xy, A, x0, y0, sigma_x, sigma_y, offset):
     x, y = xy
     func = A * np.exp(-(((x - x0) ** 2) / (2 * sigma_x ** 2) + ((y - y0) ** 2) / (2 * sigma_y ** 2))) + offset
     return func.ravel()
 
-def gaussian_1d(x, A, mu, sigma):
-    return A * np.exp( -((x - mu) ** 2) / (2 * sigma ** 2) )
+def gaussian_1d(x, A, mu, sigma, offset):
+    return A * np.exp( -((x - mu) ** 2) / (2 * sigma ** 2) ) + offset
