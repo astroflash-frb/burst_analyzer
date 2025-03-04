@@ -213,7 +213,7 @@ class BurstAnalyzer:
             self.masked_ds = self.data.copy()
            
         # plot main panel
-        self.ax_main.imshow(self.masked_ds, aspect='auto', origin='lower', cmap='viridis', interpolation='none', vmin=self.vmin, vmax=self.vmax)
+        self.ax_main.imshow(self.masked_ds, aspect='auto', origin='lower', cmap='viridis', interpolation='hanning', vmin=self.vmin, vmax=self.vmax)
         self.ax_main.set_xlim([0, self.masked_ds.shape[1]])
         self.ax_main.set_xlabel('Time bins')
         self.ax_main.set_ylabel('Frequency channels') 
