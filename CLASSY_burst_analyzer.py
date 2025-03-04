@@ -222,17 +222,18 @@ class BurstAnalyzer:
             
            
         # plot main panel
-        self.ax_main.imshow(self.masked_ds, aspect='auto', origin='lower', cmap='viridis', interpolation='hanning', vmin=self.vmin, vmax=self.vmax)
-        self.ax_main.set_xlim([0, self.masked_ds.shape[1]])
+        self.ax_main.imshow(self.masked_ds, aspect='auto', origin='lower', extent=[self.crop_start, self.crop_end, 0, self.masked_ds.shape[0]],
+                            cmap='viridis', interpolation='hanning', vmin=self.vmin, vmax=self.vmax)
+        self.ax_main.set_xlim([self.crop_start, self.crop_end])
         self.ax_main.set_xlabel('Time bins')
         self.ax_main.set_ylabel('Frequency channels') 
         # plot top panel
-        self.ax_top.plot(np.arange(self.masked_ds.shape[1]), self.masked_ds.sum(axis=0), drawstyle='steps-mid', color='k')
-        self.ax_top.axvline(self.event_start / self.time_factor, color='darkviolet', lw=1)
-        self.ax_top.axvline(self.event_end / self.time_factor, color='darkviolet', lw=1)
+        self.ax_top.plot(np.linspace(self.crop_start, self.crop_end, self.masked_ds.shape[1]), self.masked_ds.sum(axis=0), drawstyle='steps-mid', color='k')
+        self.ax_top.axvline(self.event_start, color='darkviolet', lw=1)
+        self.ax_top.axvline(self.event_end, color='darkviolet', lw=1)
         for region in self.burst_regions:
             start, end = region
-            self.ax_top.fill_between([start/self.time_factor, end/self.time_factor], 0, 1, color='orange', alpha = 0.3, transform=self.ax_top.get_xaxis_transform())
+            self.ax_top.fill_between([start, end], 0, 1, color='orange', alpha = 0.3, transform=self.ax_top.get_xaxis_transform())
         # plot side panel
         self.ax_right.plot(self.masked_ds.sum(axis=1), np.arange(self.masked_ds.shape[0]), drawstyle='steps-mid', color='k')
         
@@ -240,11 +241,11 @@ class BurstAnalyzer:
         # auto-detect a peak
         if not self.manual_peaks:
             peak_disp = np.argmax(np.nansum(self.masked_ds, axis=0))
-            peak_og = (peak_disp + self.crop_start) * self.time_factor
+            peak_og = np.linspace(self.crop_start, self.crop_end, self.masked_ds.shape[1])[peak_disp]
             self.peak_positions = [peak_og]
         # plot red lines at the peaks
         for p in self.peak_positions:
-            p_disp = (p // self.time_factor) - self.crop_start
+            p_disp = p 
             self.ax_top.axvline(p_disp, ls='--', color='red', lw=1)
         # update the TOA with the first peak position
         if self.peak_positions:
@@ -311,31 +312,39 @@ class BurstAnalyzer:
     # Create stage 1 button functions
     def on_timeres_down(self, event):
         self.time_factor *= 2
-        splice = self.data.shape[1]-self.data.shape[1]%self.time_factor
-        array = self.data[:,:splice]
+        array = self.data[:,self.crop_start:self.crop_end]
+        splicet = array.shape[1]-array.shape[1]%self.time_factor
+        splicef = array.shape[0]-array.shape[0]%self.freq_factor
+        array = array[:splicef,:splicet]
         self.masked_ds = basic_funcs.decimate_2d(arr=array, tfac=self.time_factor, ffac=self.freq_factor)
         self.update_plot()
 
     def on_timeres_up(self, event):
         if self.time_factor > 1:
             self.time_factor //= 2
-        splice = self.data.shape[1]-self.data.shape[1]%self.time_factor
-        array = self.data[:,:splice]
+        array = self.data[:,self.crop_start:self.crop_end]
+        splicet = array.shape[1]-array.shape[1]%self.time_factor
+        splicef = array.shape[0]-array.shape[0]%self.freq_factor
+        array = array[:splicef,:splicet]
         self.masked_ds = basic_funcs.decimate_2d(arr=array, tfac=self.time_factor, ffac=self.freq_factor)
         self.update_plot()
 
     def on_freqres_down(self, event):
         self.freq_factor *= 2
-        splice = self.data.shape[0]-self.data.shape[0]%self.freq_factor
-        array = self.data[:splice,:]
+        array = self.data[:,self.crop_start:self.crop_end]
+        splicet = array.shape[1]-array.shape[1]%self.time_factor
+        splicef = array.shape[0]-array.shape[0]%self.freq_factor
+        array = array[:splicef,:splicet]
         self.masked_ds = basic_funcs.decimate_2d(arr=array, tfac=self.time_factor, ffac=self.freq_factor)
         self.update_plot()
 
     def on_freqres_up(self, event):
         if self.freq_factor > 1:
             self.freq_factor //= 2
-        splice = self.data.shape[0]-self.data.shape[0]%self.freq_factor
-        array = self.data[:splice,:]
+        array = self.data[:,self.crop_start:self.crop_end]
+        splicet = array.shape[1]-array.shape[1]%self.time_factor
+        splicef = array.shape[0]-array.shape[0]%self.freq_factor
+        array = array[:splicef,:splicet]
         self.masked_ds = basic_funcs.decimate_2d(arr=array, tfac=self.time_factor, ffac=self.freq_factor)
         self.update_plot()
 
@@ -359,44 +368,46 @@ class BurstAnalyzer:
     def on_next_from_preview(self, event):
         #Move to Stage 2: RFI flagging,
         self.stage = "flag"
-        self.masked_ds = np.ma.masked_array(self.masked_ds, mask=np.zeros(self.masked_ds.shape, dtype=bool), fill_value=np.nan)
+        self.time_factor = 1
+        self.freq_factor = 1
+        self.masked_ds = basic_funcs.decimate_2d(arr=self.data, tfac=self.time_factor, ffac=self.freq_factor)
+        self.masked_ds = np.ma.masked_array(self.masked_ds, mask=np.zeros(self.masked_ds.shape, dtype=bool), fill_value=np.nan)[:,self.crop_start:self.crop_end]
         self.update_plot() 
 
     def on_set_dm(self, event):
         # Set time/frequency resolution back to original
-        self.time_factor = 1
-        self.freq_factor = 1
-        self.masked_ds = basic_funcs.decimate_2d(arr=self.data, tfac=self.time_factor, ffac=self.freq_factor)
         new_dm = float(self.text_dm.text)
         if new_dm is not None:
-            self.masked_data = basic_funcs.dedisperse(self.masked_ds, -self.args.dm, self.freqs, self.tsamp)
-            self.masked_data = basic_funcs.dedisperse(self.masked_ds, new_dm, self.freqs, self.tsamp)
+            self.time_factor = 1
+            self.freq_factor = 1
+            self.masked_ds = basic_funcs.decimate_2d(arr=self.data, tfac=self.time_factor, ffac=self.freq_factor)
+            self.masked_ds = basic_funcs.dedisperse(self.masked_ds, -self.args.dm, self.freqs, self.tsamp)
+            self.masked_ds = basic_funcs.dedisperse(self.masked_ds, new_dm, self.freqs, self.tsamp)
             self.data = basic_funcs.dedisperse(self.data, -self.args.dm, self.freqs, self.tsamp)
             self.data = basic_funcs.dedisperse(self.data, new_dm, self.freqs, self.tsamp)
+            self.masked_ds = self.masked_ds[:,self.crop_start:self.crop_end]
             self.args.dm = new_dm
             self.update_plot()
             
     # STAGE 2 FLAG
     def draw_flag(self):
-        new_crop_start = self.crop_start // self.time_factor
-        new_crop_end = self.crop_end // self.time_factor
-        
-
-        self.ax_main.imshow(self.masked_ds, aspect='auto', origin='lower', cmap=self.cmap, interpolation='hanning', vmin=self.vmin, vmax=self.vmax)
-        self.ax_main.set_xlim([0, self.masked_ds.shape[1]])
+        # plot main panel
+        self.ax_main.imshow(self.masked_ds, aspect='auto', origin='lower', extent=[self.crop_start, self.crop_end, 0, self.masked_ds.shape[0]],
+                            cmap='viridis', interpolation='hanning', vmin=self.vmin, vmax=self.vmax)
+        self.ax_main.set_xlim([self.crop_start, self.crop_end])
         self.ax_main.set_xlabel('Time bins')
         self.ax_main.set_ylabel('Frequency channels') 
         # plot top panel
-        self.ax_top.plot(np.arange(self.masked_ds.shape[1]), np.nansum(self.masked_ds,axis=0), drawstyle='steps-mid', color='k')
-        self.ax_top.axvline(self.event_start // self.time_factor, color='darkviolet', lw=1) # onburst start
-        self.ax_top.axvline(self.event_end // self.time_factor, color='darkviolet', lw=1) # onburst end
+        self.ax_top.plot(np.linspace(self.crop_start, self.crop_end, self.masked_ds.shape[1]), self.masked_ds.sum(axis=0), drawstyle='steps-mid', color='k')
+        self.ax_top.axvline(self.event_start, color='darkviolet', lw=1)
+        self.ax_top.axvline(self.event_end, color='darkviolet', lw=1)
         for region in self.burst_regions:
             start, end = region
-            self.ax_top.fill_between([start/self.time_factor, end/self.time_factor], 0, 1, color='orange', alpha = 0.3, transform=self.ax_top.get_xaxis_transform())
-
+            self.ax_top.fill_between([start, end], 0, 1, color='orange', alpha = 0.3, transform=self.ax_top.get_xaxis_transform())
+        # plot side panel
+        self.ax_right.plot(self.masked_ds.sum(axis=1), np.arange(self.masked_ds.shape[0]), drawstyle='steps-mid', color='k')
         for p in self.peak_positions: # peak positions
-            p_disp = (p // self.time_factor) - new_crop_start
-            self.ax_top.axvline(p_disp, ls='--', color='red', lw=1)
+            self.ax_top.axvline(p, ls='--', color='red', lw=1)
         # plot side panel
         self.ax_right.plot(np.nansum(self.masked_ds,axis=1), np.arange(self.masked_ds.shape[0]), drawstyle='steps-mid', color='k')
         self.ax_right.axhline(self.spec_ex_lo, color='darkviolet', ls='--') # specex
@@ -489,11 +500,10 @@ class BurstAnalyzer:
     def draw_compute(self):
         self.clear_buttons()
         # convert timebinsand vertical lines in top panel to milliseconds
-        zero_time_range = np.linspace(0, self.masked_ds.shape[1] * self.tsamp * 1000, self.masked_ds.shape[1])
+        zero_time_range = np.linspace(self.crop_start*self.tsamp*1e3, self.crop_end*self.tsamp*1e3, self.masked_ds.shape[1])
         t_event_start = self.event_start // self.time_factor * self.tsamp * 1000  # in ms now
         t_event_end = self.event_end // self.time_factor * self.tsamp * 1000  # in ms now
-        new_crop_start = self.crop_start // self.time_factor
-        self.t_peak_positions = [((pp // self.time_factor) - new_crop_start) * self.tsamp * 1000 for pp in self.peak_positions]
+        self.t_peak_positions = [((pp // self.time_factor)) * self.tsamp * 1000 for pp in self.peak_positions]
         
         #plot
         self.ax_main.imshow(self.masked_ds, aspect='auto', origin='lower', interpolation='hanning', vmin=self.vmin, vmax=self.vmax, 
@@ -502,10 +512,10 @@ class BurstAnalyzer:
         self.ax_main.set_ylabel('Frequency (MHz)') 
         # plot top panel
         prof = np.nanmean(self.masked_ds, axis=0)
-        offprof = np.concatenate([prof[0:self.event_start], prof[self.event_end:]])
+        offprof = np.concatenate([prof[0:self.event_start-self.crop_start], prof[self.event_end-self.crop_start:]])
         self.prof = (prof - np.nanmean(offprof)) / np.nanstd(offprof)
         burstonly_prof = np.nanmean(self.masked_ds[self.spec_ex_lo:self.spec_ex_hi, :], axis=0)
-        burstonly_offprof = np.concatenate([burstonly_prof[0:self.event_start], burstonly_prof[self.event_end:]])
+        burstonly_offprof = np.concatenate([burstonly_prof[0:self.event_start-self.crop_start], burstonly_prof[self.event_end-self.crop_start:]])
         burstonly_prof = (burstonly_prof - np.nanmean(burstonly_offprof)) / np.nanstd(burstonly_offprof)     
         
         self.ax_top.plot(zero_time_range, burstonly_prof, drawstyle='steps-mid', color='silver')
@@ -556,9 +566,11 @@ class BurstAnalyzer:
     def get_burst_properties(self, event):
         
         # Gaussian fit to each burst region
-        zero_time_range = np.linspace(0, self.masked_ds.shape[1] * self.tsamp * 1000, self.masked_ds.shape[1])
+        zero_time_range = np.linspace(self.crop_start*self.tsamp*1e3, self.crop_end*self.tsamp*1e3, self.masked_ds.shape[1])
         for region in self.burst_regions:
             start, end = region
+            start = start - self.crop_start
+            end = end - self.crop_start
             xdata = zero_time_range[start:end]
             ydata = self.prof[start:end]
             initial_guess = (np.max(ydata), xdata[np.argmax(ydata)], (xdata[1]-xdata[0])/2, 0) #/2 is somewhat arbitrary
@@ -566,20 +578,19 @@ class BurstAnalyzer:
             bounds = ([0, xdata[0], 0, -10], [np.inf, xdata[-1], xdata[-1]-xdata[0], 10])
             popt, _ = curve_fit(basic_funcs.gaussian_1d, xdata, ydata, p0 = initial_guess, bounds=bounds, maxfev=10000)
             print('fit for ',region)
-            print(initial_guess, popt)
             self.ax_top.plot(xdata, basic_funcs.gaussian_1d(xdata,*popt), color='red')
         
         # ToA
         self.MJD = self.start_mjd + (self.plus_mjd_sec_updated / (24 * 3600))
         filename = Path(self.burst_file).name
         self.burst_time_from_filename = float(filename.split('_')[1].split('s')[0])
-        self.MJD_offset = (self.MJD - self.burst_time_from_filename) * (24 * 3600) * 1000  # in ms
-        t_event_start = self.event_start * self.tsamp * 1000
-        t_event_end = self.event_end * self.tsamp * 1000
+        self.MJD_offset = (self.MJD - self.burst_time_from_filename) * (24 * 3600) * 1e3  # in ms
+        t_event_start = self.event_start * self.tsamp * 1e3
+        t_event_end = self.event_end * self.tsamp * 1e3
         # Energetics
-        flux_prof = self.prof[self.event_start:self.event_end] * basic_funcs.radiometer(self.tsamp * 1000, self.bw, self.npol, self.SEFD)
+        flux_prof = self.prof[self.event_start-self.crop_start:self.event_end-self.crop_start] * basic_funcs.radiometer(self.tsamp * 1e3, self.bw, self.npol, self.SEFD)
         self.peak_flux = np.max(flux_prof)
-        self.fluence_Jyms = np.sum(flux_prof * self.tsamp * 1000)
+        self.fluence_Jyms = np.sum(flux_prof * self.tsamp * 1e3)
         self.iso_E = None
         if self.args.distance and self.args.redshift:
             self.iso_E = 4 * np.pi * self.fluence_Jyms * u.Jy * u.ms * self.bw * u.MHz * \
@@ -603,9 +614,7 @@ class BurstAnalyzer:
         popt, _ = curve_fit(basic_funcs.gaussian_1d, xdata, ydata, p0=initial_guess, bounds=bounds)
         return popt
     
-    def fit_gaussian_2d(self, array, initial_guess):
-        x = np.arange(array.shape[1]) * self.tsamp*1e3
-        y = np.linspace(self.freqs[0], self.freqs[-1], array.shape[0])
+    def fit_gaussian_2d(self, x, y, array, initial_guess):
         xx, yy = np.meshgrid(x, y)
         xdata = np.vstack((xx.ravel(), yy.ravel()))
         ydata = array.ravel()
@@ -614,9 +623,7 @@ class BurstAnalyzer:
         popt, _ = curve_fit(basic_funcs.gaussian_2d, xdata, ydata, p0=initial_guess, bounds=bounds)
         return popt
     
-    def plot_2d_gaussian_fit(self, array, popt):
-        x = np.arange(array.shape[1]) * self.tsamp*1e3
-        y = np.linspace(self.freqs[0], self.freqs[-1], array.shape[0])
+    def plot_2d_gaussian_fit(self, x, y, array, popt):
         xx, yy = np.meshgrid(x, y)
         
         fitted_gaussian = basic_funcs.gaussian_2d((xx, yy), *popt).reshape(array.shape)
@@ -671,7 +678,7 @@ class BurstAnalyzer:
             # crop clicking
             if event.inaxes == self.ax_top and event.xdata is not None:
                 x_disp = int(np.round(event.xdata))
-                x_og = x_disp * self.time_factor # convert to og resolution
+                x_og = x_disp # convert to og resolution
                 
                 # CROP
                 if event.key == 'c':
@@ -682,14 +689,10 @@ class BurstAnalyzer:
                     if len(self.crop_clicks) == 2:
                         new_crop_start, new_crop_end = sorted(self.crop_clicks)
                         if new_crop_end > new_crop_start: # some validation
-                            old_crop_start = self.crop_start #save the current crop start for the offset calc
-                            self.crop_start = (old_crop_start + new_crop_start) // self.time_factor
-                            self.crop_end = (old_crop_start + new_crop_end) // self.time_factor
-                            self.event_start = (self.event_start - new_crop_start) // self.time_factor #also update the onburst lines
-                            self.event_end = self.event_end - new_crop_start
-                            self.burst_regions = [(start - new_crop_start, end - new_crop_start) for start,end in self.burst_regions]
-                            self.peak_positions = [p - new_crop_start for p in self.peak_positions]
-                            self.masked_ds = self.masked_ds[:, self.crop_start:self.crop_end]
+                            old_crop_start = self.crop_start #save the current crop start for the offset calculation
+                            self.crop_start = new_crop_start
+                            self.crop_end =  new_crop_end
+                            self.masked_ds = self.masked_ds[:, (new_crop_start-old_crop_start)//self.time_factor:(new_crop_end-old_crop_start)//self.time_factor]
                             if args.verbose:
                                 print(f"New crop from og timebin {self.crop_start} to {self.crop_end}")
                             self.crop_clicks = []
@@ -737,9 +740,8 @@ class BurstAnalyzer:
                         
                 # PEAK SELECTION
                 # add a peak
-                elif event.key == 'm':
-                    curr_off = self.crop_start // self.time_factor #determine current offset due to cropping
-                    p_og = (x_disp + curr_off) * self.time_factor
+                elif event.key == 'm': 
+                    p_og = x_disp
                     self.manual_peaks = True
                     self.peak_positions.append(p_og)
                     if args.verbose:
@@ -747,10 +749,9 @@ class BurstAnalyzer:
                     self.update_plot()
                 # remove a peak
                 elif event.key == 'd':
-                    curr_off = self.crop_start // self.time_factor #determine current offset due to cropping
-                    tol = 5 # how close to click in bins to remove the peak
+                    tol = 20 # how close to click in bins to remove the peak
                     if self.peak_positions:
-                        disp_peaks = [ (p // self.time_factor) - curr_off for p in self.peak_positions ]
+                        disp_peaks = [ p for p in self.peak_positions ]
                         distances = [abs(p_disp - x_disp) for p_disp in disp_peaks]#find closest peak to click
                         min_dist = min(distances)
                         if min_dist <= tol:
@@ -820,7 +821,7 @@ class BurstAnalyzer:
                 x = int(np.round(event.xdata))
                 y = int(np.round(event.ydata))
                 if x is not None and y is not None:
-                    xdata = np.arange(self.masked_ds.shape[1]) * self.tsamp*1e3
+                    xdata = np.linspace(self.crop_start*self.tsamp*1e3, self.crop_end*self.tsamp*1e3, self.masked_ds.shape[1])
                     ydata = np.linspace(self.freqs[0], self.freqs[-1], self.masked_ds.shape[0])
                     acf = basic_funcs.acf_2d(self.masked_ds)
                     timeseries = np.mean(acf, axis=0)
@@ -828,26 +829,23 @@ class BurstAnalyzer:
                     print('starting acf fit')
                     initial_guess = (np.max(acf), xdata[np.argmax(timeseries)], ydata[np.argmax(spectra)],
                                      5, 50, 0)
-                    popt_acf = self.fit_gaussian_2d(acf, initial_guess) 
+                    popt_acf = self.fit_gaussian_2d(xdata, ydata, acf, initial_guess) 
                     timeseries = np.mean(self.masked_ds, axis=0)
                     spectra = np.mean(self.masked_ds, axis=1)
 
                     print('starting ds fit')
-                    xdata = np.arange(self.masked_ds.shape[1]) * self.tsamp*1e3
-                    ydata = np.linspace(self.freqs[0], self.freqs[-1], self.masked_ds.shape[0])
                     initial_guess = (np.max(self.masked_ds), x, popt_acf[3]/np.sqrt(2), 0)
                     poptx = self.fit_gaussian_1d(xdata, timeseries, initial_guess)
                     print(initial_guess)
                     initial_guess = (np.max(self.masked_ds), y, popt_acf[4]/np.sqrt(2), 0)
                     print(initial_guess)
                     popty = self.fit_gaussian_1d(ydata, spectra, initial_guess)
-                    # popt_ds = self.fit_gaussian_2d(self.masked_ds, initial_guess)
                     # Combine parameters: center and amplitude from ds, widths from acf adjusted by sqrt(2)
                     combined_popt = (np.max(self.masked_ds), poptx[1], popty[1], popt_acf[3] / np.sqrt(2), 
                                      popt_acf[4] / np.sqrt(2), 0)
                     
                     print('plotting', combined_popt)
-                    self.plot_2d_gaussian_fit(self.masked_ds, combined_popt)
+                    self.plot_2d_gaussian_fit(xdata, ydata, self.masked_ds, combined_popt)
 
     def run(self):
         plt.show()
