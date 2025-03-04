@@ -212,7 +212,13 @@ class BurstAnalyzer:
         if self.masked_ds is None:
             self.masked_ds = self.data.copy()
             
-            
+        if args.jess:
+            self.masked_ds = np.ma.masked_array(self.masked_ds, mask=np.zeros(self.masked_ds.shape, dtype=bool), fill_value=np.nan)
+            temp_mask = jess.channel_masks.channel_masker(dynamic_spectra=self.masked_ds.data.T, test='skew', sigma=3, show_plots=False) 
+            for idx, booli in enumerate(temp_mask):
+                self.masked_ds.mask[idx, :] = booli
+            for idx in [0,1,126,127]:
+                self.masked_ds.mask[idx, :] = True
             
            
         # plot main panel
@@ -869,6 +875,9 @@ if __name__ == "__main__":
                         help="Increase output verbosity")
     parser.add_argument("-s", "--burst_df", type=str,
                         help="Path to an existing burst properties CSV file", required=False)
+    parser.add_argument("-j", "--jess", action="store_true",
+                        help="Enables jess-flagging in the first preview stage. Useful for spotting weaker bursts.")
+    
     args = parser.parse_args()
     #create dictionary for all burst's properties, check verbosity
     global verbose, burst_database
