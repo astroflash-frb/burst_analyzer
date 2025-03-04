@@ -211,6 +211,9 @@ class BurstAnalyzer:
         # downsample and crop data
         if self.masked_ds is None:
             self.masked_ds = self.data.copy()
+            
+            
+            
            
         # plot main panel
         self.ax_main.imshow(self.masked_ds, aspect='auto', origin='lower', cmap='viridis', interpolation='hanning', vmin=self.vmin, vmax=self.vmax)
@@ -372,14 +375,8 @@ class BurstAnalyzer:
         new_crop_start = self.crop_start // self.time_factor
         new_crop_end = self.crop_end // self.time_factor
         
-        # plot main panel
-        # self.masked_ds = self.masked_ds.copy()
-        # vmin = np.nanquantile(self.masked_ds, 0.01)
-        # vmax = np.nanquantile(self.masked_ds, 0.99)
-        self.vmin = np.quantile(data, 0.01)
-        self.vmax = np.quantile(data, 0.99)
 
-        self.ax_main.imshow(self.masked_ds, aspect='auto', origin='lower', cmap=self.cmap, interpolation='none', vmin=self.vmin, vmax=self.vmax)
+        self.ax_main.imshow(self.masked_ds, aspect='auto', origin='lower', cmap=self.cmap, interpolation='hanning', vmin=self.vmin, vmax=self.vmax)
         self.ax_main.set_xlim([0, self.masked_ds.shape[1]])
         self.ax_main.set_xlabel('Time bins')
         self.ax_main.set_ylabel('Frequency channels') 
@@ -493,9 +490,7 @@ class BurstAnalyzer:
         self.t_peak_positions = [((pp // self.time_factor) - new_crop_start) * self.tsamp * 1000 for pp in self.peak_positions]
         
         #plot
-        # vmin = np.quantile(self.masked_ds, 0.01)
-        # vmax = np.quantile(self.masked_ds, 0.99)
-        self.ax_main.imshow(self.masked_ds, aspect='auto', origin='lower', interpolation='none', vmin=self.vmin, vmax=self.vmax, 
+        self.ax_main.imshow(self.masked_ds, aspect='auto', origin='lower', interpolation='hanning', vmin=self.vmin, vmax=self.vmax, 
                             extent=[zero_time_range[0],zero_time_range[-1],self.freqs[0],self.freqs[-1]])
         self.ax_main.set_xlabel('Time (ms)')
         self.ax_main.set_ylabel('Frequency (MHz)') 
