@@ -110,8 +110,8 @@ class BurstAnalyzer:
         self.freqs = metadata['freqs']
         self.burst_file = burst_file
         self.args = args
-        self.vmin = np.quantile(data, 0.01)
-        self.vmax = np.quantile(data, 0.99)
+        self.vmin = np.quantile(data, 0.2)
+        self.vmax = np.quantile(data, 0.8)
         
         # Initialize DataFrame for burst properties
         if args.burst_df:
@@ -376,6 +376,8 @@ class BurstAnalyzer:
         # self.masked_ds = self.masked_ds.copy()
         # vmin = np.nanquantile(self.masked_ds, 0.01)
         # vmax = np.nanquantile(self.masked_ds, 0.99)
+        self.vmin = np.quantile(data, 0.01)
+        self.vmax = np.quantile(data, 0.99)
 
         self.ax_main.imshow(self.masked_ds, aspect='auto', origin='lower', cmap=self.cmap, interpolation='none', vmin=self.vmin, vmax=self.vmax)
         self.ax_main.set_xlim([0, self.masked_ds.shape[1]])
