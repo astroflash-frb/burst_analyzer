@@ -237,6 +237,8 @@ class BurstAnalyzer:
             self.ax_top.fill_between([start, end], 0, 1, color='orange', alpha = 0.3, transform=self.ax_top.get_xaxis_transform())
         # plot side panel
         self.ax_right.plot(self.masked_ds.sum(axis=1), np.arange(self.masked_ds.shape[0]), drawstyle='steps-mid', color='k')
+        self.ax_right.axhline(self.spec_ex_lo, color='darkviolet', ls='--')
+        self.ax_right.axhline(self.spec_ex_hi, color='darkviolet', ls='--')
         
         
         # auto-detect a peak
@@ -554,7 +556,7 @@ class BurstAnalyzer:
         self.btn_save.on_clicked(self.on_save)
         self.btn_nextburst.on_clicked(self.on_nextburst)
         self.btn_properties.on_clicked(self.get_burst_properties)
-        self.btn_properties.on_clicked(self.on_badfit)
+        self.btn_badfit.on_clicked(self.on_badfit)
         
         self.button_cids.extend([self.btn_save, self.btn_nextburst, self.btn_properties, self.btn_badfit])
         self.button_axes.extend([ax_btn_save, ax_btn_nextburst, ax_btn_properties, ax_btn_badfit])
@@ -568,7 +570,6 @@ class BurstAnalyzer:
 
     # compute burst properties
     def get_burst_properties(self, event):
-        
         # Gaussian fit to each burst region
         zero_time_range = np.linspace(self.crop_start*self.tsamp*1e3, self.crop_end*self.tsamp*1e3, self.masked_ds.shape[1])
         for region in self.burst_regions:
@@ -578,10 +579,8 @@ class BurstAnalyzer:
             xdata = zero_time_range[start:end]
             ydata = self.prof[start:end]
             initial_guess = (np.max(ydata), xdata[np.argmax(ydata)], (xdata[1]-xdata[0])/2, 0) #/2 is somewhat arbitrary
-            print('p0 for ',region)
             bounds = ([0, xdata[0], 0, -10], [np.inf, xdata[-1], xdata[-1]-xdata[0], 10])
             popt, _ = curve_fit(basic_funcs.gaussian_1d, xdata, ydata, p0 = initial_guess, bounds=bounds, maxfev=10000)
-            print('fit for ',region)
             self.ax_top.plot(xdata, basic_funcs.gaussian_1d(xdata,*popt), color='red')
         
         # ToA
@@ -623,7 +622,6 @@ class BurstAnalyzer:
         xdata = np.vstack((xx.ravel(), yy.ravel()))
         ydata = array.ravel()
         bounds = ([0, x[0], y[0], 0, 0, -10], [np.inf, x[-1], y[-1], x[-1]-x[0], y[-1]-y[0], 10])
-        print(initial_guess, bounds)
         popt, _ = curve_fit(basic_funcs.gaussian_2d, xdata, ydata, p0=initial_guess, bounds=bounds)
         return popt
     
@@ -675,9 +673,9 @@ class BurstAnalyzer:
         plt.close()
         
     def on_badfit(self, event):
-        print("A flag has been added to mark these Gaussian fits as bad.")
-        self.badfit = True
-
+        self.badfit = not self.badfit
+        print(f"Bad fit flag set to {self.badfit}")
+        
     # Click functionality
     def on_click(self, event):
 
@@ -774,6 +772,23 @@ class BurstAnalyzer:
                         else:
                             if args.verbose:
                                 print("No peak near the clicked position to remove.")
+            if event.inaxes == self.ax_right and event.ydata is not None:
+                y_disp = int(np.round(event.ydata))
+                y_og = y_disp
+                if event.key == 'e':
+                    self.spec_ex_clicks.append(y_og)
+                    if args.verbose:
+                        print(f"Specex click at displayed y={y_disp} -> original y={y_og}")
+                    if len(self.spec_ex_clicks) == 2:
+                        self.spec_ex_lo, self.spec_ex_hi = sorted(self.spec_ex_clicks)
+                        if self.spec_ex_hi > self.spec_ex_lo:
+                            print(f"Spectral extent from from channel {self.spec_ex_lo} to {self.spec_ex_hi}")
+                            self.spec_ex_clicks = []
+                            self.update_plot()
+                        else:
+                            print("Invalid selection.")
+                            self.spec_ex_clicks = []
+                            self.update_plot()
         # STAGE 2 CLICKS
         elif self.stage == "flag":
             # main panel clicks

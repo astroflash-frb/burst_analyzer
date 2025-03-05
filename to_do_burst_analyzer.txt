@@ -4,7 +4,6 @@ To-Fix:
 - better normalization (normalise vs normalize in basic funcs)
 - preview and flag stage: remove ax_space and ax_right ticks/labels
 - burst properties in pandas df should be from acf
-- if gaussian fits dont work, button to flag bad fit (in this case use manually selected event dur/ specex)
 - gaussian fitting on spectral extent is funny (maybe don't do and only use manual lines?)
 
 Done: (test/check and remove from list)
@@ -19,3 +18,4 @@ Done: (test/check and remove from list)
     - test separate 1d fits instead of 2d
     - stage 3: only timeseries is normalized which causes scaling differences from the fits
 - optimized stage 1 replotting/clicks (doesn't take a million years now woooo!!!!)
+- if gaussian fits dont work, button to flag bad fit (in this case use manually selected event dur/ specex)
