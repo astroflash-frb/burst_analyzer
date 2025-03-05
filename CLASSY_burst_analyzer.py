@@ -150,6 +150,7 @@ class BurstAnalyzer:
         # "Stage 3: compute" defaults
         self.plus_mjd_sec_updated = None # to recalulculate the TOA at the selected peaks, move to stage 1?
         self.t_peak_positions = []
+        self.badfit = False
 
         # The current stage: "preview", "flag", or "compute".
         self.stage = "preview"
@@ -544,16 +545,19 @@ class BurstAnalyzer:
         ax_btn_save = self.figure.add_axes([0.7, 0.85, 0.1, 0.04])
         ax_btn_nextburst = self.figure.add_axes([0.7, 0.8, 0.1, 0.04])
         ax_btn_properties = self.figure.add_axes([0.7, 0.75, 0.1, 0.04])
+        ax_btn_badfit = self.figure.add_axes([0.7, 0.65, 0.1, 0.04])
         
         self.btn_save = Button(ax_btn_save, 'Save')
         self.btn_nextburst = Button(ax_btn_nextburst, 'Next Burst')
         self.btn_properties = Button(ax_btn_properties, 'Burst Properties')
+        self.btn_badfit = Button(ax_btn_badfit, 'Bad Fit')
         self.btn_save.on_clicked(self.on_save)
         self.btn_nextburst.on_clicked(self.on_nextburst)
         self.btn_properties.on_clicked(self.get_burst_properties)
+        self.btn_properties.on_clicked(self.on_badfit)
         
-        self.button_cids.extend([self.btn_save, self.btn_nextburst, self.btn_properties])
-        self.button_axes.extend([ax_btn_save, ax_btn_nextburst, ax_btn_properties])
+        self.button_cids.extend([self.btn_save, self.btn_nextburst, self.btn_properties, self.btn_badfit])
+        self.button_axes.extend([ax_btn_save, ax_btn_nextburst, ax_btn_properties, ax_btn_badfit])
         
         # Hide some tick labels
         plt.setp(self.ax_space.get_xticklabels(), visible=False)
@@ -649,7 +653,8 @@ class BurstAnalyzer:
             "fluence_Jyms": self.fluence_Jyms,
             "iso_E": self.iso_E,
             "event_duration_ms": self.event_duration,
-            "spectral_extent_MHz": self.freqs[self.spec_ex_hi] - self.freqs[self.spec_ex_lo]
+            "spectral_extent_MHz": self.freqs[self.spec_ex_hi] - self.freqs[self.spec_ex_lo],
+            "bad_fit?": self.badfit
         }
         
         # Check if burst name already exists in the DataFrame
@@ -668,6 +673,10 @@ class BurstAnalyzer:
 
     def on_nextburst(self, event):
         plt.close()
+        
+    def on_badfit(self, event):
+        print("A flag has been added to mark these Gaussian fits as bad.")
+        self.badfit = True
 
     # Click functionality
     def on_click(self, event):
