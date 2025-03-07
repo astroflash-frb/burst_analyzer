@@ -660,6 +660,10 @@ class BurstAnalyzer:
             print(f"Burst properties for {burst_props['burst_name']} already exist. Skipping save.")
 
         else:
+            
+#            if args.array_save_mode:
+#                np.save(file, arr)
+                
             # Append the burst properties to the DataFrame
             self.burst_df = pd.concat([self.burst_df, pd.DataFrame([burst_props])], ignore_index=True)
 
@@ -899,6 +903,8 @@ if __name__ == "__main__":
                         help="Path to an existing burst properties CSV file", required=False)
     parser.add_argument("-j", "--jess", action="store_true",
                         help="Enables jess-flagging in the first preview stage. Useful for spotting weaker bursts.")
+    parser.add_argument("-a" "--array_save_mode", action="store_true",
+                        help="In addition to a database file to save burst properties, also save the cropped and flagged dynamic spectra to plot.")
     
     args = parser.parse_args()
     #create dictionary for all burst's properties, check verbosity
