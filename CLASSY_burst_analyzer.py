@@ -150,6 +150,7 @@ class BurstAnalyzer:
         # "Stage 3: compute" defaults
         self.plus_mjd_sec_updated = None # to recalulculate the TOA at the selected peaks, move to stage 1?
         self.t_peak_positions = []
+        self.integrated_sn = None
         self.badfit = False
 
         # The current stage: "preview", "flag", or "compute".
@@ -583,14 +584,18 @@ class BurstAnalyzer:
             popt, _ = curve_fit(basic_funcs.gaussian_1d, xdata, ydata, p0 = initial_guess, bounds=bounds, maxfev=10000)
             self.ax_top.plot(xdata, basic_funcs.gaussian_1d(xdata,*popt), color='red')
         
-        # ToA
+        # Temporal
         self.MJD = self.start_mjd + (self.plus_mjd_sec_updated / (24 * 3600))
         filename = Path(self.burst_file).name
-        self.burst_time_from_filename = float(filename.split('_')[1].split('s')[0])
-        self.MJD_offset = (self.MJD - self.burst_time_from_filename) * (24 * 3600) * 1e3  # in ms
+        if args.telescope == 'NRT':
+            self.burst_time_from_filename = float(filename.split('_')[1].split('s')[0]) #This is NRT specific
+            self.MJD_offset = (self.MJD - self.burst_time_from_filename) * (24 * 3600) * 1e3  # in ms
         t_event_start = self.event_start * self.tsamp * 1e3
         t_event_end = self.event_end * self.tsamp * 1e3
+        self.event_duration = t_event_end - t_event_start
+        
         # Energetics
+        self.integrated_sn = self.prof[self.event_start-self.crop_start:self.event_end-self.crop_start]
         flux_prof = self.prof[self.event_start-self.crop_start:self.event_end-self.crop_start] * basic_funcs.radiometer(self.tsamp * 1e3, self.bw, self.npol, self.SEFD)
         self.peak_flux = np.max(flux_prof)
         self.fluence_Jyms = np.sum(flux_prof * self.tsamp * 1e3)
@@ -598,15 +603,15 @@ class BurstAnalyzer:
         if self.args.distance and self.args.redshift:
             self.iso_E = 4 * np.pi * self.fluence_Jyms * u.Jy * u.ms * self.bw * u.MHz * \
                     (self.args.distance * u.megaparsec)**2 / (1 + self.args.redshift)
-        # occupency
-        self.event_duration = t_event_end - t_event_start
+        # Spectral
+        
         # print values
         annotation = (f"Fluence: {np.round(self.fluence_Jyms, 2)} Jy ms \n"
                     f"Peak Flux Density: {np.round(self.peak_flux, 2)} Jy \n"
                     f"Event duration: {np.round(t_event_end - t_event_start, 2)} ms \n"
                     f"Spectral extent: {self.freqs[self.spec_ex_hi] - self.freqs[self.spec_ex_lo]} MHz \n"
-                    f"MJD @ peak: {self.MJD} \n"
-                    f"MJD offset: {np.round(self.MJD_offset, 3)} ms")
+                    f"MJD @ peak: {self.MJD} \n")
+#                    f"MJD offset: {np.round(self.MJD_offset, 3)} ms")
         self.ax_space.text(0., 0.98, annotation, transform=self.ax_space.transAxes,
                         fontsize=10, color='white', verticalalignment='top',
                         bbox=dict(facecolor='black', alpha=1))
@@ -645,8 +650,9 @@ class BurstAnalyzer:
         burst_props = {
             "burst_name": Path(self.burst_file).stem,
             "MJD_at_peak": self.MJD,
-            "MJD_offset_ms": self.MJD_offset,
+ #           "MJD_offset_ms": self.MJD_offset,
             "peak_positions_ms": self.t_peak_positions,
+            "integrated_s/n": self.integrated_sn,
             "peak_flux": self.peak_flux,
             "fluence_Jyms": self.fluence_Jyms,
             "iso_E": self.iso_E,
@@ -936,6 +942,5 @@ if __name__ == "__main__":
     else:
         print("No burst filterbank name provided. Use -b for a single burst or -B for a file containing multiple burst names, one per line.")
         sys.exit(1)
- 
-    #export dictionary
+
     
