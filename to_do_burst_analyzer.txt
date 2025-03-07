@@ -5,6 +5,8 @@ To-Fix:
 - preview and flag stage: remove ax_space and ax_right ticks/labels
 - burst properties in pandas df should be from acf
 - gaussian fitting on spectral extent is funny (maybe don't do and only use manual lines?)
+- make sure plus_mjd_sec_updated is being updated properly
+
 
 Done: (test/check and remove from list)
 - peaks dont update with change in time resolution (clicking adds a line at wrong position)

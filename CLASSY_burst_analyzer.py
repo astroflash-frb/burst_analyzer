@@ -152,6 +152,7 @@ class BurstAnalyzer:
         self.t_peak_positions = []
         self.integrated_sn = None
         self.badfit = False
+        self.1dgauss_fits = []
 
         # The current stage: "preview", "flag", or "compute".
         self.stage = "preview"
@@ -583,6 +584,7 @@ class BurstAnalyzer:
             bounds = ([0, xdata[0], 0, -10], [np.inf, xdata[-1], xdata[-1]-xdata[0], 10])
             popt, _ = curve_fit(basic_funcs.gaussian_1d, xdata, ydata, p0 = initial_guess, bounds=bounds, maxfev=10000)
             self.ax_top.plot(xdata, basic_funcs.gaussian_1d(xdata,*popt), color='red')
+            self.1dgauss_fits.append(popt)
         
         # Temporal
         self.MJD = self.start_mjd + (self.plus_mjd_sec_updated / (24 * 3600))
@@ -657,6 +659,7 @@ class BurstAnalyzer:
             "fluence_Jyms": self.fluence_Jyms,
             "iso_E": self.iso_E,
             "event_duration_ms": self.event_duration,
+            "1D_Gaussiand_fits"; self.1dgauss_fits,
             "spectral_extent_MHz": self.freqs[self.spec_ex_hi] - self.freqs[self.spec_ex_lo],
             "bad_fit?": self.badfit
         }
