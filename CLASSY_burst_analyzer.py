@@ -152,7 +152,7 @@ class BurstAnalyzer:
         self.t_peak_positions = []
         self.integrated_sn = None
         self.badfit = False
-        self.1dgauss_fits = []
+        self.onedgauss_fits = []
 
         # The current stage: "preview", "flag", or "compute".
         self.stage = "preview"
@@ -584,7 +584,7 @@ class BurstAnalyzer:
             bounds = ([0, xdata[0], 0, -10], [np.inf, xdata[-1], xdata[-1]-xdata[0], 10])
             popt, _ = curve_fit(basic_funcs.gaussian_1d, xdata, ydata, p0 = initial_guess, bounds=bounds, maxfev=10000)
             self.ax_top.plot(xdata, basic_funcs.gaussian_1d(xdata,*popt), color='red')
-            self.1dgauss_fits.append(popt)
+            self.onedgauss_fits.append(popt)
         
         # Temporal
         self.MJD = self.start_mjd + (self.plus_mjd_sec_updated / (24 * 3600))
@@ -659,7 +659,7 @@ class BurstAnalyzer:
             "fluence_Jyms": self.fluence_Jyms,
             "iso_E": self.iso_E,
             "event_duration_ms": self.event_duration,
-            "1D_Gaussiand_fits"; self.1dgauss_fits,
+            "1D_Gaussian_fits": self.onedgauss_fits,
             "spectral_extent_MHz": self.freqs[self.spec_ex_hi] - self.freqs[self.spec_ex_lo],
             "bad_fit?": self.badfit
         }
@@ -669,9 +669,9 @@ class BurstAnalyzer:
             print(f"Burst properties for {burst_props['burst_name']} already exist. Skipping save.")
 
         else:
-            
-#            if args.array_save_mode:
-#                np.save(file, arr)
+            # Potentially save the entire burst dynamic spectrum array/profile, to load the .npz use np.load, .files gives the idx
+            if args.array_save_mode:
+                burst_database[Path(self.burst_file).stem] = {'ds': self.masked_ds, 'prof':self.prof}
                 
             # Append the burst properties to the DataFrame
             self.burst_df = pd.concat([self.burst_df, pd.DataFrame([burst_props])], ignore_index=True)
@@ -912,7 +912,7 @@ if __name__ == "__main__":
                         help="Path to an existing burst properties CSV file", required=False)
     parser.add_argument("-j", "--jess", action="store_true",
                         help="Enables jess-flagging in the first preview stage. Useful for spotting weaker bursts.")
-    parser.add_argument("-a" "--array_save_mode", action="store_true",
+    parser.add_argument("-a", "--array_save_mode", action="store_true",
                         help="In addition to a database file to save burst properties, also save the cropped and flagged dynamic spectra to plot.")
     
     args = parser.parse_args()
