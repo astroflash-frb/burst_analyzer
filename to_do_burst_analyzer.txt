@@ -9,6 +9,8 @@ To-Fix:
 
 
 Done: (test/check and remove from list)
+- updated list of parameters to save in dataframe
+- spectra is saved in npz for each file if flag is raised
 - peaks dont update with change in time resolution (clicking adds a line at wrong position)
 - reset to original resolution(s) at the end of stage 1 and cleared masks
 - add a check so that the dynamic spectrum is the correct shape to downsample

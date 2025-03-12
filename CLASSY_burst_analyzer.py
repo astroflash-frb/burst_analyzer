@@ -23,6 +23,7 @@ import your
 import jess.channel_masks
 from pathlib import Path
 from scipy.optimize import curve_fit
+import glob
 
 import matplotlib
 matplotlib.use('tkagg')
@@ -113,16 +114,6 @@ class BurstAnalyzer:
         self.vmin = np.quantile(data, 0.2)
         self.vmax = np.quantile(data, 0.8)
         
-        # Initialize DataFrame for burst properties
-        if args.burst_df:
-            self.burst_df = pd.read_csv(args.burst_df)
-        else:
-            args.burst_df = 'burst_properties.csv'
-            self.burst_df = pd.DataFrame(columns=[
-                "burst_name", "MJD_at_peak", "MJD_offset_ms", "peak_positions_ms",
-                "peak_flux", "fluence_Jyms", "iso_E", "event_duration_ms", "spectral_extent_MHz"
-            ])
-        
         # "Stage 1: preview burst" defaults and variables
         self.time_factor = 1
         self.freq_factor = 1
@@ -152,6 +143,7 @@ class BurstAnalyzer:
         self.t_peak_positions = []
         self.integrated_sn = None
         self.badfit = False
+        self.is_special = False
         self.onedgauss_fits = []
 
         # The current stage: "preview", "flag", or "compute".
@@ -549,19 +541,23 @@ class BurstAnalyzer:
         ax_btn_save = self.figure.add_axes([0.7, 0.85, 0.1, 0.04])
         ax_btn_nextburst = self.figure.add_axes([0.7, 0.8, 0.1, 0.04])
         ax_btn_properties = self.figure.add_axes([0.7, 0.75, 0.1, 0.04])
-        ax_btn_badfit = self.figure.add_axes([0.7, 0.65, 0.1, 0.04])
+        ax_btn_badfit = self.figure.add_axes([0.5, 0.8, 0.1, 0.04])
+        ax_btn_special = self.figure.add_axes([0.5, 0.75, 0.1, 0.04])
         
         self.btn_save = Button(ax_btn_save, 'Save')
         self.btn_nextburst = Button(ax_btn_nextburst, 'Next Burst')
         self.btn_properties = Button(ax_btn_properties, 'Burst Properties')
         self.btn_badfit = Button(ax_btn_badfit, 'Bad Fit')
+        self.btn_special = Button(ax_btn_special, 'Special')
+        
         self.btn_save.on_clicked(self.on_save)
         self.btn_nextburst.on_clicked(self.on_nextburst)
         self.btn_properties.on_clicked(self.get_burst_properties)
         self.btn_badfit.on_clicked(self.on_badfit)
+        self.btn_special.on_clicked(self.on_special)
         
-        self.button_cids.extend([self.btn_save, self.btn_nextburst, self.btn_properties, self.btn_badfit])
-        self.button_axes.extend([ax_btn_save, ax_btn_nextburst, ax_btn_properties, ax_btn_badfit])
+        self.button_cids.extend([self.btn_save, self.btn_nextburst, self.btn_properties, self.btn_badfit, self.btn_special])
+        self.button_axes.extend([ax_btn_save, ax_btn_nextburst, ax_btn_properties, ax_btn_badfit, ax_btn_special])
         
         # Hide some tick labels
         plt.setp(self.ax_space.get_xticklabels(), visible=False)
@@ -648,20 +644,33 @@ class BurstAnalyzer:
 
     # Create stage 3 button functions
     def on_save(self, event):
+        # Initialize DataFrame for burst properties
+        if args.burst_df:
+            self.burst_df = pd.read_csv(args.burst_df)
+        else:
+            args.burst_df = 'burst_properties.csv'
+            self.burst_df = pd.DataFrame(columns=[
+                "burst_name", "DM", "MJD_at_peak", "peak_positions_ms", "peak_flux",
+                "fluence_Jyms", "iso_E", "event_duration_ms", "1D_Gaussian_fits", "spectral_extent_MHz", "mask", "bad_fit?", "special?", "integrated_s/n"
+            ])
+            
         # create a dictionary for the current burst
         burst_props = {
             "burst_name": Path(self.burst_file).stem,
+            "DM": self.args.dm,
             "MJD_at_peak": self.MJD,
  #           "MJD_offset_ms": self.MJD_offset,
             "peak_positions_ms": self.t_peak_positions,
-            "integrated_s/n": self.integrated_sn,
             "peak_flux": self.peak_flux,
             "fluence_Jyms": self.fluence_Jyms,
             "iso_E": self.iso_E,
             "event_duration_ms": self.event_duration,
             "1D_Gaussian_fits": self.onedgauss_fits,
             "spectral_extent_MHz": self.freqs[self.spec_ex_hi] - self.freqs[self.spec_ex_lo],
-            "bad_fit?": self.badfit
+            "mask": self.masked_channels,
+            "bad_fit?": self.badfit,
+            "special?": self.is_special,
+            "integrated_s/n": self.integrated_sn.data
         }
         
         # Check if burst name already exists in the DataFrame
@@ -671,8 +680,8 @@ class BurstAnalyzer:
         else:
             # Potentially save the entire burst dynamic spectrum array/profile, to load the .npz use np.load, .files gives the idx
             if args.array_save_mode:
-                burst_database[Path(self.burst_file).stem] = {'ds': self.masked_ds, 'prof':self.prof}
-                
+                # burst_database = {'file':self.burst_file, 'ds': self.masked_ds, 'prof':self.prof}
+                np.savez(f"{Path(self.burst_file)}.npz", self.masked_ds, self.prof)
             # Append the burst properties to the DataFrame
             self.burst_df = pd.concat([self.burst_df, pd.DataFrame([burst_props])], ignore_index=True)
 
@@ -684,6 +693,10 @@ class BurstAnalyzer:
 
     def on_nextburst(self, event):
         plt.close()
+    
+    def on_special(self, event):
+        self.is_special = not self.is_special
+        print(f"Special flag set to {self.is_special}")
         
     def on_badfit(self, event):
         self.badfit = not self.badfit
@@ -898,6 +911,8 @@ if __name__ == "__main__":
                         help="Name of the burst filterbank e.g. burst_60531.37442289023s4p1t38.5845_500ms.fil",required=False)
     parser.add_argument("-B","--Bfiles",type=str,
                         help="A text file containing a list of burst names, one on each line",required=False)
+    parser.add_argument("-f","--flags",type=str,
+                        help="Wildcard flag to use to search for filterbank files, e.g. *60350.*", required=False)
     parser.add_argument("-d","--dm",type=float,
                         help="The dispersion measure (DM) of the burst in pc/cc (float)",required=True)
     parser.add_argument("-t","--telescope",type=str,
@@ -928,7 +943,7 @@ if __name__ == "__main__":
         data, metadata = load_burst(burst_file,args.dm,args.telescope)
         analyzer = BurstAnalyzer(data, metadata, burst_file, args)
         analyzer.run()
-        np.savez_compressed("burst_database.npz",**burst_database)
+        # np.savez_compressed("burst_database.npz",**burst_database)
     elif args.Bfiles:
         try:
             with open(args.Bfiles, 'r') as f:
@@ -938,9 +953,19 @@ if __name__ == "__main__":
                         data, metadata = load_burst(burst_file,args.dm,args.telescope)
                         analyzer = BurstAnalyzer(data, metadata, burst_file, args)
                         analyzer.run()
-                        np.savez_compressed("burst_database.npz",**burst_database)
+                        # np.savez_compressed("burst_database.npz",**burst_database)
         except Exception as e:
             print(f"Error reading file {args.Bfiles}: {e}")
+            sys.exit(1)
+    elif args.flags:
+        try:
+            for burst_file in glob.glob(f"/mnt/d/R147/ECLAT_bursts_R147_CD/L/bursts/*{args.flags}*"):
+                data, metadata = load_burst(burst_file,args.dm,args.telescope)
+                analyzer = BurstAnalyzer(data, metadata, burst_file, args)
+                analyzer.run()
+                # np.savez_compressed("burst_database.npz",**burst_database)
+        except Exception as e:
+            print(f"Error reading file {args.flags}: {e}")
             sys.exit(1)
     else:
         print("No burst filterbank name provided. Use -b for a single burst or -B for a file containing multiple burst names, one per line.")
