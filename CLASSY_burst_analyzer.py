@@ -367,7 +367,7 @@ class BurstAnalyzer:
         self.stage = "flag"
         self.time_factor = 1
         self.freq_factor = 1
-        self.masked_ds = basic_funcs.decimate_2d(arr=self.data, tfac=self.time_factor, ffac=self.freq_factor)
+        self.masked_ds = self.data.copy()
         self.masked_ds = np.ma.masked_array(self.masked_ds, mask=np.zeros(self.masked_ds.shape, dtype=bool), fill_value=np.nan)[:,self.crop_start:self.crop_end]
         self.update_plot() 
 
@@ -960,10 +960,11 @@ if __name__ == "__main__":
     elif args.flags:
         try:
             for burst_file in glob.glob(f"/mnt/d/R147/ECLAT_bursts_R147_CD/L/bursts/*{args.flags}*"):
-                data, metadata = load_burst(burst_file,args.dm,args.telescope)
-                analyzer = BurstAnalyzer(data, metadata, burst_file, args)
-                analyzer.run()
-                # np.savez_compressed("burst_database.npz",**burst_database)
+                if '.npz' not in burst_file:
+                    data, metadata = load_burst(burst_file,args.dm,args.telescope)
+                    analyzer = BurstAnalyzer(data, metadata, burst_file, args)
+                    analyzer.run()
+                    # np.savez_compressed("burst_database.npz",**burst_database)
         except Exception as e:
             print(f"Error reading file {args.flags}: {e}")
             sys.exit(1)
