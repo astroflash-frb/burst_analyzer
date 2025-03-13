@@ -6,7 +6,7 @@ To-Fix:
 - burst properties in pandas df should be from acf
 - gaussian fitting on spectral extent is funny (maybe don't do and only use manual lines?)
 - make sure plus_mjd_sec_updated is being updated properly
-
+- double check temporal widths from acf
 
 Done: (test/check and remove from list)
 - updated list of parameters to save in dataframe
