@@ -1,7 +1,7 @@
 To-Fix:
 NBNB - currently, the NRT SEFD is for 1.4 GHz not 2.3? GHz
 
-
+- add v_lo and v_hi (top and bot freq)
 - double check all the calculations, e.g. fluence, energy, etc
 - convert the toas to barycentric?
 - better normalization (normalise vs normalize in basic funcs)
@@ -11,6 +11,7 @@ NBNB - currently, the NRT SEFD is for 1.4 GHz not 2.3? GHz
 - make sure plus_mjd_sec_updated is being updated properly
 - double check temporal widths from acf
 - if only 1 burst, output file = input name
+
 
 Done: (test/check and remove from list)
 - updated list of parameters to save in dataframe
