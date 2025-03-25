@@ -223,6 +223,10 @@ class BurstAnalyzer:
         self.ax_main.set_xlim([self.crop_start, self.crop_end])
         self.ax_main.set_xlabel('Time bins')
         self.ax_main.set_ylabel('Frequency channels') 
+        self.ax_main.axhline(self.spec_ex_lo, color='darkviolet', ls='--')
+        self.ax_main.axhline(self.spec_ex_hi, color='darkviolet', ls='--')
+        self.ax_main.axvline(self.event_start, color='darkviolet', lw=1)
+        self.ax_main.axvline(self.event_end, color='darkviolet', lw=1)
         # plot top panel
         self.ax_top.plot(np.linspace(self.crop_start, self.crop_end, self.masked_ds.shape[1]), self.masked_ds.sum(axis=0), drawstyle='steps-mid', color='k')
         self.ax_top.axvline(self.event_start, color='darkviolet', lw=1)
@@ -682,7 +686,7 @@ class BurstAnalyzer:
             # Potentially save the entire burst dynamic spectrum array/profile, to load the .npz use np.load, .files gives the idx
             if args.array_save_mode:
                 # burst_database = {'file':self.burst_file, 'ds': self.masked_ds, 'prof':self.prof}
-                np.savez(f"{Path(self.burst_file)}.npz", self.masked_ds, self.prof)
+                np.savez(f"{Path(self.burst_file)}.npz", data=self.masked_ds, profile=self.prof, mask=self.masked_channels)
             # Append the burst properties to the DataFrame
             self.burst_df = pd.concat([self.burst_df, pd.DataFrame([burst_props])], ignore_index=True)
 
@@ -881,7 +885,6 @@ class BurstAnalyzer:
                     print('starting acf fit')
                     initial_guess = (np.max(acf), xdata[np.argmax(timeseries)], ydata[np.argmax(spectra)],
                                      5, 50, 0)
-                    initial_guess = (np.max(acf), x)
                     popt_acf = self.fit_gaussian_2d(xdata, ydata, acf, initial_guess) 
                     self.acf_fits = popt_acf
                     timeseries = np.mean(self.masked_ds, axis=0)
