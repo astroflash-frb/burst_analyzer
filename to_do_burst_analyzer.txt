@@ -1,6 +1,7 @@
 To-Fix:
 NBNB - currently, the NRT SEFD is for 1.4 GHz not 2.3? GHz
 
+- enable downsampling in time
 - add v_lo and v_hi (top and bot freq)
 - double check all the calculations, e.g. fluence, energy, etc
 - convert the toas to barycentric?
