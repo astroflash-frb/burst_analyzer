@@ -1,3 +1,5 @@
+# DEPRECATED - See https://github.com/DirkKuiper/flits for newer version
+
 # burst_analyzer
 This is an interactive tool to read in burst snippet in filterbank format, zap RFI, and calculate burst properties.
 
